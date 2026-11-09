@@ -15,14 +15,41 @@ Owner: a non-technical user who checks in about once a day. Every screen,
 message, summary and pull request must be understandable without coding
 knowledge.
 
-### Library layout (inside the container)
+### Library layout (TRaSH Guides style)
 
-| Path      | Contents                                  |
-|-----------|-------------------------------------------|
-| `/movies` | Films (one folder per film, Radarr style) |
-| `/tv`     | TV: `Show/Season NN/episode.mkv` (Sonarr) |
-| `/config` | Tailarr's database, settings, logs        |
-| `/work`   | Optional scratch space for big temp files |
+The owner's Unraid server follows the TRaSH Guides layout: **one `/data`
+share** holding downloads and media, with downloads **hardlinked** into the
+media folders. Tailarr mounts `/data` **exactly the way Radarr and Sonarr
+do** (host `/mnt/user/data` → container `/data`), so file paths in
+Radarr/Sonarr webhooks are the same paths Tailarr sees.
+
+| Container path        | Contents                                         |
+|-----------------------|--------------------------------------------------|
+| `/data`               | The whole data share (same mount as Radarr/Sonarr) |
+| `/data/media/movies`  | Films — default **Films folder** setting (one folder per film) |
+| `/data/media/tv`      | TV — default **TV folder** setting (`Show/Season NN/episode.mkv`) |
+| `/config`             | Tailarr's database, settings, logs               |
+| `/work`               | Optional scratch space for big temp files        |
+
+- The Films and TV folders are **settings** (defaults above; can also be
+  pre-set with the `TAILARR_MOVIES_DIR` / `TAILARR_TV_DIR` environment
+  variables). Tailarr only ever browses or changes files inside these two
+  folders — never the downloads folders elsewhere in `/data`.
+- **Path mapping** setting: if Radarr/Sonarr ever report a different path
+  (e.g. `/movies/...` instead of `/data/media/movies/...`), a list of
+  "Radarr/Sonarr path → Tailarr path" pairs translates them. Empty by
+  default, because with the shared `/data` mount the paths already match.
+- Because everything is on one share, new copies and their temp files stay
+  on the same disk/filesystem as the original, so the final "rename into
+  place" is instant and safe.
+- **Hardlinks are normal here.** A film still seeding in the download
+  client is the *same file* in two places. Editing it in place (e.g.
+  changing default/forced flags with `mkvpropedit`) **also edits the seeding
+  copy** and can break the torrent. Making a *new copy* is always safe for
+  seeding. *Replacing* the original with a new file breaks the hardlink:
+  seeding keeps working from the download copy, but the film then uses
+  twice the disk space until the torrent is removed. Tailarr explains this
+  in plain English wherever it applies.
 
 ### Features (in build order)
 
@@ -82,17 +109,19 @@ These override convenience, speed and any other instruction in this repo.
 6. **Unraid permissions.** The app runs as `PUID` (default 99) / `PGID`
    (default 100) with `UMASK` (default 002). Every file and folder Tailarr
    creates must end up owned by that user/group with those permissions.
-7. **Hardlinks.** If a file has more than one hardlink (common when a
-   download client is still seeding it), warn before any in-place edit:
-   changing it in place also changes the seeding copy and can break the
-   torrent. Default for in-place edits on hardlinked files: refuse unless the
-   user ticks "I understand".
+7. **Hardlinks.** With the TRaSH layout most new files are hardlinked to a
+   seeding download. If a file has more than one hardlink, warn before any
+   in-place edit: changing it in place also changes the seeding copy and can
+   break the torrent. Default for in-place edits on hardlinked files: refuse
+   unless the user ticks "I understand". Automatic rules never edit a
+   hardlinked file in place unless the rule explicitly allows it.
 8. **Dolby Vision safety.** Refuse "remove Dolby Vision" for profile 5 (it has
    no HDR10 base layer, so the picture would show wrong colours). Explain
    why in plain English.
-9. **Paths stay inside the library.** Reject any path outside `/movies`,
-   `/tv` (and `/work` for temp files). Never follow user input into other
-   folders.
+9. **Paths stay inside the library.** Reject any path outside the
+   configured Films and TV folders (and `/work` for temp files), after
+   resolving `..` and symlinks. The rest of `/data` (downloads, torrents) is
+   off limits even though it is mounted.
 10. **No secrets in the repo.** API keys for Radarr/Sonarr/Plex live only in
     the database under `/config`.
 
@@ -118,8 +147,29 @@ one process, no external services.
 | Radarr/Sonarr/Plex APIs | `httpx` | Posters, path info, rescans, Plex refresh. |
 | Tests | **pytest** (backend, using real MKVToolNix on generated sample files), **Vitest** + Testing Library (UI parts), **Playwright** (whole app in desktop *and* phone sizes, with screenshots) | Real tools on real (tiny) files catch real problems. |
 | Container | Debian slim base, MKVToolNix + MediaInfo from apt, dovi_tool from GitHub release; small entrypoint script that applies PUID/PGID/UMASK | Familiar to Unraid users (same env vars as linuxserver.io images). |
-| Publishing | GitHub Actions → GitHub Container Registry `ghcr.io/benjamincandlin/tailarr` | Free; builds and publishes automatically on every merge to `main`. |
-| Unraid | Template XML in `unraid/tailarr.xml` | Install by pointing Unraid at the template; fields pre-filled. |
+| Publishing | GitHub Actions → GitHub Container Registry `ghcr.io/benjamincandlin/tailarr` | Free; builds and publishes automatically on every merge to `main`. See "Public image" below. |
+| Unraid | Template XML in `unraid/tailarr.xml` | Copied once onto the Unraid flash drive; fields pre-filled. |
+
+### Public image from a private repo
+
+The GitHub repo is **private**, but Unraid must download the image without
+logging in, so the **image is made public** while the code stays private.
+
+- GitHub Container Registry packages have their own visibility, separate
+  from the repo. The first publish creates the package as *private*;
+  GitHub doesn't let the workflow change that itself.
+- **One-time step for the owner** (after the first image is published):
+  GitHub → your profile → **Packages** → `tailarr` → **Package settings** →
+  *Danger Zone* → **Change visibility** → **Public**. Every later publish stays
+  public automatically.
+- Be aware: anyone could then download the image and see the app inside it
+  (it contains no secrets — settings and API keys live only in `/config`).
+- Because the repo is private, Unraid can't fetch the template from GitHub
+  either: the owner downloads `unraid/tailarr.xml` once and copies it to the
+  flash drive at `config/plugins/dockerMan/templates-user/my-tailarr.xml`,
+  then uses **Docker → Add Container → Template: tailarr**.
+- Alternatives considered: logging Unraid into GHCR with a token (fiddly,
+  tokens expire); Docker Hub (another account to manage).
 
 Default web port: **8484** (configurable).
 
@@ -213,29 +263,35 @@ unraid/             Unraid template
   3. After any change, Tailarr asks Radarr/Sonarr to rescan and Plex to
      refresh that item (optional, if connected).
   4. Setting to put copies in a separate folder instead (e.g. a
-     `/movies-hdr10` share used as a separate Plex library), for anyone who
+     `/data/media/movies-hdr10` folder used as a separate Plex library), for anyone who
      prefers Radarr/Sonarr never to see them.
   5. Tailarr's own folder watcher always ignores Tailarr's temp files and
      copies, so it never processes its own output in a loop.
 - **To verify on the real server** (owner, in Stage 8): that Radarr/Sonarr
   don't try to import the `- HDR10` copy during a rescan.
-- **Path mapping:** Radarr/Sonarr may see the library at a different path
-  (e.g. `/data/media/movies`) than Tailarr (`/movies`). Settings include a
-  path-mapping table, with a "test" button.
+- **Paths:** Tailarr mounts `/data` like Radarr/Sonarr, so webhook paths
+  match directly. The path-mapping table (with a "test" button that checks
+  the translated path exists) covers setups where they differ.
+- **Upgrades and hardlinks:** when Radarr/Sonarr upgrade a film, the new
+  file arrives hardlinked to its download. A rule that makes an HDR10 copy
+  is unaffected (copies are separate files).
 
 ## 6. Build plan
 
 Each stage is small, ends with something the owner can see and test, and
 has automated tests. **One stage per session, done completely.**
 
-### Stage 0 — Planning (this PR)
+### Stage 0 — Planning (done)
 CLAUDE.md, empty PROGRESS.md and DECISIONS.md.
 
-### Stage 1 — Foundations: app shell, design, Docker
+### Stage 1 — Foundations: app shell, design, Docker (done)
 - Backend skeleton (FastAPI) serving the React app and a `/api/health`
   endpoint reporting versions of mkvmerge, mkvextract, mkvpropedit,
-  mediainfo, dovi_tool, and whether `/movies`, `/tv`, `/config` are mounted
-  and writable.
+  mediainfo, dovi_tool, and whether the Films folder, TV folder and
+  `/config` exist and are writable.
+- Settings storage with the Films folder / TV folder settings (defaults
+  `/data/media/movies` and `/data/media/tv`) and path checks that keep
+  everything inside them.
 - Frontend skeleton with the full design system: theme tokens, dark/light/
   system switch, sidebar + phone bottom bar, empty placeholder pages for
   Films / TV / Rules / Queue / Settings. Settings page shows the health info.
@@ -245,15 +301,17 @@ CLAUDE.md, empty PROGRESS.md and DECISIONS.md.
   low-resolution) MKVs: SDR H.264 with several audio/subtitle languages and
   forced subs; HEVC HDR10; HEVC HDR10+; Dolby Vision profile 8.1; profile 5;
   profile 7 (dual-track); 23.976, 25 and 29.97 fps; files with chapters and
-  attachments; a fake `/movies` and `/tv` tree.
+  attachments; a fake TRaSH-style `/data` tree (`media/movies`, `media/tv`,
+  `torrents/...`) including a hardlinked "seeding" file.
 - GitHub Actions: run all tests on every PR; build and publish the image to
   GHCR on merge to `main`; Unraid template.
-- **Owner checks:** install on Unraid from the template, open the web page,
-  see the sidebar, switch dark/light, open Settings and see green ticks for
-  each tool and folder. Try it on a phone.
+- **Owner checks:** make the image public (one-time step above), install on
+  Unraid from the template, open the web page, see the sidebar, switch
+  dark/light, open Settings and see green ticks for each tool and folder.
+  Try it on a phone.
 
 ### Stage 2 — Film library
-- Scan `/movies` (cached in SQLite, quick re-scan button), poster grid and
+- Scan the Films folder (cached in SQLite, quick re-scan button), poster grid and
   list view, search, sort (title / date added / size).
 - Posters from local artwork files in the film folder (`poster.jpg`,
   `folder.jpg`, …), otherwise a tasteful placeholder (Radarr posters come in
@@ -311,7 +369,7 @@ CLAUDE.md, empty PROGRESS.md and DECISIONS.md.
   across a show.
 
 ### Stage 8 — Connections: Radarr, Sonarr, Plex
-- Settings for URL + API key (with "Test" buttons), path mapping.
+- Settings for URL + API key (with "Test" buttons), path-mapping editor.
 - Posters/backdrops and proper titles from Radarr/Sonarr.
 - After jobs: trigger Radarr/Sonarr rescan and Plex refresh (optional).
 - Tracking of Tailarr-made copies; webhook endpoint (secret-protected) to
@@ -367,6 +425,31 @@ CLAUDE.md, empty PROGRESS.md and DECISIONS.md.
 8. **Finish** with a short plain-English summary for the owner: what you
    built, how to check it works, anything you need from them, what the next
    stage is.
+
+### Running things (for developers)
+
+```bash
+# Backend tests (needs mkvtoolnix, mediainfo, ffmpeg; dovi_tool optional locally)
+cd backend && uv sync && uv run pytest
+# Frontend: lint, unit tests, build
+cd frontend && npm ci && npm run lint && npm test && npm run build
+# Browser tests on desktop + phone, with screenshots in e2e/screenshots/
+cd e2e && npm ci && npx playwright test
+# Sample files on their own
+python3 tests/samples/make_samples.py /tmp/samples
+# Image smoke test (after docker build -t tailarr .)
+docker/smoke-test.sh tailarr
+```
+
+- CI sets `TAILARR_REQUIRE_ALL_TOOLS=1`, so a missing tool fails tests
+  instead of skipping them.
+- Dolby Vision / HDR10+ samples are made by inserting metadata into tiny
+  x265 encodes (`tests/samples/make_samples.py`), using real dovi_tool RPU
+  test files from `tests/samples/fixtures/`. The profile 7 sample is a single
+  video track carrying profile 7 metadata; a true dual-layer (BL+EL) sample
+  is added in Stage 6, where it's needed.
+- Keep `DOVI_TOOL_VERSION` the same in `Dockerfile` and
+  `.github/workflows/ci.yml`.
 
 ### Coding conventions
 - Python: type hints, `ruff` for lint/format, `pytest`. All external tool

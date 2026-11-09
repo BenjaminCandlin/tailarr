@@ -1,0 +1,102 @@
+@import "tailwindcss";
+
+/* Dark mode is switched by the "dark" class on <html>. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * Colour tokens. Every colour in the app comes from these variables, so the
+ * dark and light themes stay consistent. Teal is the single accent colour.
+ */
+:root {
+  --background: #f5f7f9;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --sidebar: #ffffff;
+  --muted: #eef1f4;
+  --muted-foreground: #526070;
+  --border: #dde3e9;
+  --input: #cfd7df;
+  --primary: #0f766e;
+  --primary-foreground: #ffffff;
+  --accent: #e6f5f3;
+  --accent-foreground: #0b5b55;
+  --ring: #0d9488;
+  --success: #15803d;
+  --success-soft: #e8f6ec;
+  --warning: #a15c07;
+  --warning-soft: #fdf3e2;
+  --destructive: #c81e1e;
+  --destructive-foreground: #ffffff;
+  --destructive-soft: #fdeaea;
+  color-scheme: light;
+}
+
+.dark {
+  --background: #0d1117;
+  --foreground: #e6edf3;
+  --card: #161b22;
+  --card-foreground: #e6edf3;
+  --sidebar: #11161d;
+  --muted: #1c232c;
+  --muted-foreground: #9aa6b2;
+  --border: #262e38;
+  --input: #303a46;
+  --primary: #2dd4bf;
+  --primary-foreground: #042f2b;
+  --accent: #10302d;
+  --accent-foreground: #5eead4;
+  --ring: #2dd4bf;
+  --success: #4ade80;
+  --success-soft: #0f2a1a;
+  --warning: #fbbf24;
+  --warning-soft: #2e2208;
+  --destructive: #f87171;
+  --destructive-foreground: #1f0606;
+  --destructive-soft: #2d1212;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-ring: var(--ring);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-destructive-soft: var(--destructive-soft);
+  --font-sans:
+    "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+    sans-serif;
+  --radius-lg: 0.75rem;
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+  html,
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    -webkit-font-smoothing: antialiased;
+  }
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+}
