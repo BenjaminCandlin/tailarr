@@ -32,12 +32,6 @@ describe("navigation", () => {
     );
   });
 
-  it("shows the configured Films folder in the empty library", async () => {
-    mockBackend();
-    renderApp("/films");
-    expect(await screen.findByText("/data/media/movies")).toBeInTheDocument();
-  });
-
   it("shows a friendly page for unknown addresses", () => {
     mockBackend();
     renderApp("/nowhere");

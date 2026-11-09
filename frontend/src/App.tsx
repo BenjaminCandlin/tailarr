@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router";
 
 import { AppShell } from "@/components/AppShell";
 import { ThemeProvider } from "@/lib/theme";
+import { FilmDetailPage } from "@/pages/FilmDetailPage";
 import { FilmsPage } from "@/pages/FilmsPage";
 import { NotFoundPage } from "@/pages/NotFoundPage";
 import { QueuePage } from "@/pages/QueuePage";
@@ -16,6 +17,7 @@ export function AppRoutes() {
       <Route element={<AppShell />}>
         <Route index element={<Navigate to="/films" replace />} />
         <Route path="films" element={<FilmsPage />} />
+        <Route path="films/:id" element={<FilmDetailPage />} />
         <Route path="tv" element={<TvPage />} />
         <Route path="rules" element={<RulesPage />} />
         <Route path="queue" element={<QueuePage />} />
