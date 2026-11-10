@@ -24,6 +24,7 @@ SAMPLE_FILMS = {
     "Sample Multi-Language Film",
     "Streaming Only",
     "The Long Weekend",
+    "The Quiet Hours",
     "Ärger im Paradies",
 }
 
@@ -79,6 +80,7 @@ def test_film_list(scanned: TestClient, library: Path) -> None:
     assert films["Streaming Only"]["poster_url"] is None
     assert films["Old Home Video"]["is_mkv"] is False
     assert films["Bright Lights"]["is_mkv"] is True
+    assert films["The Quiet Hours"]["year"] == 2017  # from a download-style folder name
 
     # Sorted by title, ignoring "The" and accents.
     titles = [film["title"] for film in body["films"]]
@@ -280,3 +282,17 @@ def test_scan_starts_when_tailarr_starts(config: AppConfig, library: Path) -> No
     with TestClient(app) as client:
         app.state.film_scanner.wait(30)
         assert len(_films(client)) == len(SAMPLE_FILMS)
+
+
+def test_release_names_and_year_from_file_name(client: TestClient, library: Path) -> None:
+    source = library / "Bright Lights (2019)" / "Bright Lights (2019) Bluray-2160p.mkv"
+    release = library / "A.Beautiful.Mind.2001.1080p.BluRay.x264-WiKi"
+    release.mkdir()
+    shutil.copyfile(source, release / "a.beautiful.mind.2001.1080p.mkv")
+    plain = library / "1917"
+    plain.mkdir()
+    shutil.copyfile(source, plain / "1917 (2019) Bluray-2160p.mkv")
+    client.app.state.film_scanner.run()  # type: ignore[attr-defined]
+    films = _films(client)
+    assert films["A Beautiful Mind"]["year"] == 2001
+    assert films["1917"]["year"] == 2019  # the folder has no year; the file name does

@@ -150,18 +150,22 @@ def save_films(session: Session, found: list[FoundFilm]) -> int:
     for item in found:
         seen.add(item.folder)
         parsed = parse_film_folder(item.folder_name)
+        main = item.main_file
+        year = parsed.year
+        if year is None:
+            # e.g. folder "1917" holding "1917 (2019) Bluray-2160p.mkv"
+            year = parse_film_folder(Path(main.name).stem).year
         film = existing.get(item.folder) or Film(
             folder=item.folder, folder_name="", title="", sort_title=""
         )
         film.folder_name = item.folder_name
         film.title = parsed.title
         film.sort_title = sort_key(parsed.title)
-        film.year = parsed.year
+        film.year = year
         film.tmdb_id = parsed.tmdb_id
         film.imdb_id = parsed.imdb_id
         film.poster_path, film.poster_mtime = item.poster or (None, None)
         film.backdrop_path, film.backdrop_mtime = item.backdrop or (None, None)
-        main = item.main_file
         film.main_file = main.name
         film.size = sum(f.size for f in item.files)
         film.added_at = main.mtime

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from sqlmodel import Field, SQLModel
 
-LIBRARY_CACHE_VERSION = 1
+LIBRARY_CACHE_VERSION = 1  # bump when Film/FilmFile columns change
 
 
 class Film(SQLModel, table=True):

@@ -101,7 +101,7 @@ function FilmGrid({ films }: { films: Film[] }) {
                 <FilmBadges film={film} />
               </div>
             </div>
-            <p className="mt-2 line-clamp-2 text-sm leading-snug font-medium group-hover:text-primary">
+            <p className="mt-2 line-clamp-2 text-sm leading-snug font-medium [overflow-wrap:anywhere] group-hover:text-primary">
               {film.title}
             </p>
             <p className="mt-0.5 text-xs text-muted-foreground">{filmMeta(film)}</p>

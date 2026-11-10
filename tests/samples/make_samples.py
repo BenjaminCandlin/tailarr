@@ -161,6 +161,8 @@ LIBRARY: tuple[tuple[str, str], ...] = (
     ("sdr_2997", "media/movies/The Long Weekend (1999) {tmdb-10001}/The Long Weekend (1999) {tmdb-10001} Bluray-1080p.mkv"),
     ("dv_p7", "media/movies/Blu-ray Night (2018) {imdb-tt0000001}/Blu-ray Night (2018) Remux-2160p.mkv"),
     ("hdr10plus", "media/movies/Ärger im Paradies (2020)/Ärger im Paradies (2020) WEBDL-2160p.mkv"),
+    # A folder named like a download (not renamed by Radarr).
+    ("sdr_2997", "media/movies/The.Quiet.Hours.2017.1080p.BluRay.x264-GRP/the.quiet.hours.2017.1080p.bluray.x264-grp.mkv"),
     # A copy Tailarr made earlier, next to its original.
     ("hdr10", "media/movies/Colour Test (2023)/Colour Test (2023) WEBDL-2160p DV HDR10 - HDR10.mkv"),
     ("sdr_2997", "media/tv/Test Show/Season 01/Test Show - S01E01 - Pilot.mkv"),
