@@ -2,26 +2,51 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from sqlmodel import Session
 
 from . import __version__
-from .api import health, settings
+from .api import films, health, settings
 from .core.config import AppConfig
 from .core.db import make_engine
+from .core.settings_store import get_library_settings
+from .library.scanner import FilmScanner
+
+
+@asynccontextmanager
+async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
+    # Bring the film list up to date in the background as soon as Tailarr starts.
+    app.state.film_scanner.start_if_stale()
+    yield
 
 
 def create_app(config: AppConfig | None = None) -> FastAPI:
     config = config or AppConfig.from_env()
-    app = FastAPI(title="Tailarr", version=__version__, docs_url="/api/docs", redoc_url=None)
+    app = FastAPI(
+        title="Tailarr",
+        version=__version__,
+        docs_url="/api/docs",
+        redoc_url=None,
+        lifespan=_lifespan,
+    )
     app.state.config = config
-    app.state.engine = make_engine(config.database_path)
+    engine = app.state.engine = make_engine(config.database_path)
+
+    def films_root() -> Path:
+        with Session(engine) as session:
+            return Path(get_library_settings(session, config).movies_dir)
+
+    app.state.film_scanner = FilmScanner(engine, films_root)
 
     app.include_router(health.router)
     app.include_router(settings.router)
+    app.include_router(films.router)
 
     _mount_frontend(app, config.static_dir)
     return app

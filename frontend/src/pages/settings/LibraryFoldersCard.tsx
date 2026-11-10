@@ -16,6 +16,7 @@ function FolderForm({ initial }: { initial: LibrarySettings }) {
     onSuccess: (saved) => {
       queryClient.setQueryData(["settings", "library"], saved);
       void queryClient.invalidateQueries({ queryKey: ["health"] });
+      void queryClient.invalidateQueries({ queryKey: ["films"] });
     },
   });
   const changed = movies !== initial.movies_dir || tv !== initial.tv_dir;

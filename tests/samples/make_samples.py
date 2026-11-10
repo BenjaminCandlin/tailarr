@@ -19,6 +19,10 @@ made in OUTPUT/data:
     data/media/movies/<Film (Year)>/<Film (Year)>.mkv
     data/media/tv/<Show>/Season 01/<Show> - S01E01 - <Title>.mkv
     data/torrents/movies/<release>.mkv   (hardlink to one of the films)
+
+The film folders also include poster artwork, TRaSH-style "{tmdb-...}" folder
+names, a Tailarr "- HDR10" copy, a non-MKV film, an empty folder and a
+leftover temporary file, so the library scanner meets real-world variety.
 """
 
 from __future__ import annotations
@@ -154,10 +158,29 @@ LIBRARY: tuple[tuple[str, str], ...] = (
     ("hdr10", "media/movies/Bright Lights (2019)/Bright Lights (2019) Bluray-2160p.mkv"),
     ("dv_p8", "media/movies/Colour Test (2023)/Colour Test (2023) WEBDL-2160p DV HDR10.mkv"),
     ("dv_p5", "media/movies/Streaming Only (2024)/Streaming Only (2024) WEBDL-2160p DV.mkv"),
+    ("sdr_2997", "media/movies/The Long Weekend (1999) {tmdb-10001}/The Long Weekend (1999) {tmdb-10001} Bluray-1080p.mkv"),
+    ("dv_p7", "media/movies/Blu-ray Night (2018) {imdb-tt0000001}/Blu-ray Night (2018) Remux-2160p.mkv"),
+    ("hdr10plus", "media/movies/Ärger im Paradies (2020)/Ärger im Paradies (2020) WEBDL-2160p.mkv"),
+    # A copy Tailarr made earlier, next to its original.
+    ("hdr10", "media/movies/Colour Test (2023)/Colour Test (2023) WEBDL-2160p DV HDR10 - HDR10.mkv"),
     ("sdr_2997", "media/tv/Test Show/Season 01/Test Show - S01E01 - Pilot.mkv"),
     ("sdr_2997", "media/tv/Test Show/Season 01/Test Show - S01E02 - The Second One.mkv"),
     ("hdr10plus", "media/tv/Test Show/Season 02/Test Show - S02E01 - Brighter.mkv"),
     ("dv_p8", "media/tv/Another Show (2022)/Season 01/Another Show (2022) - S01E01 - Start.mkv"),
+)
+# Poster / backdrop artwork: (relative path, top colour, bottom colour).
+ARTWORK: tuple[tuple[str, str, str], ...] = (
+    ("media/movies/Colour Test (2023)/poster.jpg", "0x0f766e", "0x111827"),
+    ("media/movies/Colour Test (2023)/fanart.jpg", "0x134e4a", "0x0b1220"),
+    ("media/movies/Bright Lights (2019)/folder.jpg", "0xb45309", "0x1f2937"),
+    ("media/movies/The Long Weekend (1999) {tmdb-10001}/poster.png", "0x1d4ed8", "0x0f172a"),
+)
+# Other things found in real film folders: (relative path, kind).
+EXTRAS: tuple[tuple[str, str], ...] = (
+    ("media/movies/Old Home Video (1995)/Old Home Video (1995).mp4", "mp4"),
+    ("media/movies/Not Downloaded Yet (2025)/", "folder"),
+    ("media/movies/Bright Lights (2019)/.tailarr-tmp-0123abcd.mkv", "junk"),
+    ("media/movies/Bright Lights (2019)/Bright Lights (2019) Bluray-2160p.en.srt", "srt"),
 )
 # A film that is also "seeding" in the download client (same file, two names).
 HARDLINKED = (
@@ -380,6 +403,16 @@ def _cover(tmp: Path) -> Path:
     return out
 
 
+def _artwork(out: Path, top: str, bottom: str) -> None:
+    """A plain gradient picture standing in for a real poster."""
+    w, h = (1280, 720) if "fanart" in out.name else (600, 900)
+    gradient = f"gradients=s={w}x{h}:c0={top}:c1={bottom}:x0=0:y0=0:x1=0:y1={h}:d=1"
+    _run(
+        ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i", gradient]
+        + ["-frames:v", "1", str(out)]
+    )
+
+
 def _flag(value: bool) -> str:
     return "yes" if value else "no"
 
@@ -458,6 +491,28 @@ def build_all(output: Path) -> dict[str, Path]:
     seeding = data / HARDLINKED[1]
     seeding.parent.mkdir(parents=True, exist_ok=True)
     os.link(data / HARDLINKED[0], seeding)
+
+    art = output / "artwork"
+    art.mkdir(exist_ok=True)
+    for relative, top, bottom in ARTWORK:
+        cached = art / f"{top}-{bottom}-{Path(relative).name}"
+        if not cached.exists():
+            _artwork(cached, top, bottom)
+        shutil.copyfile(cached, data / relative)
+    for relative, kind in EXTRAS:
+        target = data / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if kind == "folder":
+            continue
+        if kind == "mp4":
+            _run(
+                ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-i"]
+                + [str(built["sdr_2997"]), "-map", "0:v", "-c", "copy", str(target)]
+            )
+        elif kind == "srt":
+            target.write_text("1\n00:00:00,000 --> 00:00:01,000\nHello\n", encoding="utf-8")
+        else:
+            target.write_bytes(b"half-written")
 
     stamp.write_text(json.dumps({"version": SAMPLES_VERSION}))
     return built

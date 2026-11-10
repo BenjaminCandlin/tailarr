@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlmodel import Session
 
 from ..core.config import AppConfig
@@ -25,6 +25,13 @@ def read_library(
 @router.put("/library", response_model=LibrarySettings)
 def update_library(
     settings: LibrarySettings,
+    request: Request,
+    config: Annotated[AppConfig, Depends(get_config)],
     session: Annotated[Session, Depends(get_session)],
 ) -> LibrarySettings:
-    return save_library_settings(session, settings)
+    before = get_library_settings(session, config)
+    saved = save_library_settings(session, settings)
+    if saved.movies_dir != before.movies_dir:
+        # A different Films folder: look for the films in it straight away.
+        request.app.state.film_scanner.start()
+    return saved

@@ -36,7 +36,55 @@ export type LibrarySettings = {
   path_mappings: PathMapping[];
 };
 
-export class ApiError extends Error {}
+export type ScanStatus = {
+  running: boolean;
+  started_at: string | null;
+  finished_at: string | null;
+  film_count: number | null;
+  error: string | null;
+};
+
+export type Film = {
+  id: number;
+  title: string;
+  year: number | null;
+  folder_name: string;
+  poster_url: string | null;
+  size: number;
+  added_at: string;
+  file_count: number;
+  main_file: string | null;
+  is_mkv: boolean;
+};
+
+export type FilmList = { root: string; films: Film[]; scan: ScanStatus };
+
+export type FilmFile = {
+  name: string;
+  size: number;
+  modified_at: string;
+  is_mkv: boolean;
+  is_copy: boolean;
+  is_main: boolean;
+  hardlinked: boolean;
+};
+
+export type FilmDetail = Film & {
+  folder: string;
+  backdrop_url: string | null;
+  tmdb_id: number | null;
+  imdb_id: string | null;
+  files: FilmFile[];
+};
+
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status?: number,
+  ) {
+    super(message);
+  }
+}
 
 type ValidationItem = { msg?: string };
 
@@ -67,7 +115,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   } catch {
     throw new ApiError("Couldn't reach Tailarr. Is the container running?");
   }
-  if (!response.ok) throw new ApiError(await errorMessage(response));
+  if (!response.ok) throw new ApiError(await errorMessage(response), response.status);
   return (await response.json()) as T;
 }
 
@@ -79,4 +127,7 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(settings),
     }),
+  films: () => request<FilmList>("/api/films"),
+  film: (id: number | string) => request<FilmDetail>(`/api/films/${id}`),
+  rescanFilms: () => request<ScanStatus>("/api/films/scan", { method: "POST" }),
 };
