@@ -47,7 +47,7 @@ export function Poster({
         >
           <FilmIcon className={compact ? "size-4" : "size-8 opacity-70"} aria-hidden />
           {!compact && (
-            <span className="line-clamp-4 text-sm font-medium break-words text-foreground/80">
+            <span className="line-clamp-4 w-full text-sm font-medium [overflow-wrap:anywhere] text-foreground/80">
               {title}
             </span>
           )}

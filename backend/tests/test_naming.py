@@ -25,6 +25,30 @@ from tailarr.library.naming import (
         ("(2020)", "(2020)", None, None, None),
         ("Ärger im Paradies (2020)", "Ärger im Paradies", 2020, None, None),
         ("Film (2020) {edition-Director's Cut}", "Film", 2020, None, None),
+        # Bracketed years and release-style names.
+        ("12 Years A Slave [2013]", "12 Years A Slave", 2013, None, None),
+        ("300.2006.1080p.Bluray.x264.DTS.dxva", "300", 2006, None, None),
+        (
+            "300.Rise.Of.An.Empire.2014.1080p.BluRay.DTS-HD.MA.7.1",
+            "300 Rise Of An Empire",
+            2014,
+            None,
+            None,
+        ),
+        ("A.Beautiful.Mind.2001.1080p.BluRay.x264-WiKi", "A Beautiful Mind", 2001, None, None),
+        ("Blade.Runner.2049.2017.2160p.UHD", "Blade Runner 2049", 2017, None, None),
+        ("Blade Runner 2049", "Blade Runner 2049", None, None, None),  # 2049 isn't a year yet
+        ("Wonder.Woman.1984.2020.1080p", "Wonder Woman 1984", 2020, None, None),
+        ("Movie_Name_2010_720p", "Movie Name", 2010, None, None),
+        ("Some Film 1080p BluRay", "Some Film", None, None, None),
+        ("Alien³ (1992)", "Alien³", 1992, None, None),
+        (
+            "28 Years Later - The Bone Temple (2026)",
+            "28 Years Later - The Bone Temple",
+            2026,
+            None,
+            None,
+        ),
     ],
 )
 def test_parse_film_folder(

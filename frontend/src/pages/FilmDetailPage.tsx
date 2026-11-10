@@ -28,7 +28,7 @@ function FileRow({ file }: { file: FilmFile }) {
       <div className="flex items-start gap-3">
         <FileVideo className="mt-0.5 size-5 shrink-0 text-muted-foreground" aria-hidden />
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium break-words">{file.name}</p>
+          <p className="text-sm font-medium [overflow-wrap:anywhere]">{file.name}</p>
           <p className="text-xs text-muted-foreground">
             {formatSize(file.size)} · Changed {formatDate(file.modified_at)}
           </p>
