@@ -1,0 +1,1008 @@
+# ISO 639-2 code, ISO 639-1 code, English name. From mkvmerge --list-languages (MKVToolNix 82).
+aar	aa	Afar
+abk	ab	Abkhazian
+ace		Achinese
+ach		Acoli
+ada		Adangme
+ady		Adyghe
+afa		Afro-Asiatic languages
+afh		Afrihili
+afr	af	Afrikaans
+ain		Ainu (Japan)
+aka	ak	Akan
+akk		Akkadian
+alb	sq	Albanian
+ale		Aleut
+alg		Algonquian languages
+alt		Southern Altai
+amh	am	Amharic
+ang		Old English (ca. 450-1100)
+anp		Angika
+apa		Apache languages
+ara	ar	Arabic
+arc		Official Aramaic (700-300 BCE)
+arg	an	Aragonese
+arm	hy	Armenian
+arn		Mapudungun
+arp		Arapaho
+art		Artificial languages
+arw		Arawak
+asm	as	Assamese
+ast		Asturian
+ath		Athapascan languages
+aus		Australian languages
+ava	av	Avaric
+ave	ae	Avestan
+awa		Awadhi
+aym	ay	Aymara
+aze	az	Azerbaijani
+bad		Banda languages
+bai		Bamileke languages
+bak	ba	Bashkir
+bal		Baluchi
+bam	bm	Bambara
+ban		Balinese
+baq	eu	Basque
+bas		Basa (Cameroon)
+bat		Baltic languages
+bej		Beja
+bel	be	Belarusian
+bem		Bemba (Zambia)
+ben	bn	Bengali
+ber		Berber languages
+bho		Bhojpuri
+bih	bh	Bihari languages
+bik		Bikol
+bin		Bini
+bis	bi	Bislama
+bla		Siksika
+bnt		Bantu languages
+bos	bs	Bosnian
+bra		Braj
+bre	br	Breton
+btk		Batak languages
+bua		Buriat
+bug		Buginese
+bul	bg	Bulgarian
+bur	my	Burmese
+byn		Bilin
+cad		Caddo
+cai		Central American Indian languages
+car		Galibi Carib
+cat	ca	Catalan
+cau		Caucasian languages
+ceb		Cebuano
+cel		Celtic languages
+cha	ch	Chamorro
+chb		Chibcha
+che	ce	Chechen
+chg		Chagatai
+chi	zh	Chinese
+chk		Chuukese
+chm		Mari (Russia)
+chn		Chinook jargon
+cho		Choctaw
+chp		Chipewyan
+chr		Cherokee
+chu	cu	Church Slavic
+chv	cv	Chuvash
+chy		Cheyenne
+cmc		Chamic languages
+cnr		Montenegrin
+cop		Coptic
+cor	kw	Cornish
+cos	co	Corsican
+cpe		Creoles and pidgins, English based
+cpf		Creoles and pidgins, French-based
+cpp		Creoles and pidgins, Portuguese-based
+cre	cr	Cree
+crh		Crimean Tatar
+crp		Creoles and pidgins
+csb		Kashubian
+cus		Cushitic languages
+cze	cs	Czech
+dak		Dakota
+dan	da	Danish
+dar		Dargwa
+day		Land Dayak languages
+del		Delaware
+den		Slave (Athapascan)
+dgr		Dogrib
+din		Dinka
+div	dv	Dhivehi
+doi		Dogri (macrolanguage)
+dra		Dravidian languages
+dsb		Lower Sorbian
+dua		Duala
+dum		Middle Dutch (ca. 1050-1350)
+dut	nl	Dutch
+dyu		Dyula
+dzo	dz	Dzongkha
+efi		Efik
+egy		Egyptian (Ancient)
+eka		Ekajuk
+elx		Elamite
+eng	en	English
+enm		Middle English (1100-1500)
+epo	eo	Esperanto
+est	et	Estonian
+ewe	ee	Ewe
+ewo		Ewondo
+fan		Fang (Equatorial Guinea)
+fao	fo	Faroese
+fat		Fanti
+fij	fj	Fijian
+fil		Filipino
+fin	fi	Finnish
+fiu		Finno-Ugrian languages
+fon		Fon
+fre	fr	French
+frm		Middle French (ca. 1400-1600)
+fro		Old French (842-ca. 1400)
+frr		Northern Frisian
+frs		Eastern Frisian
+fry	fy	Western Frisian
+ful	ff	Fulah
+fur		Friulian
+gaa		Ga
+gay		Gayo
+gba		Gbaya (Central African Republic)
+gem		Germanic languages
+geo	ka	Georgian
+ger	de	German
+gez		Geez
+gil		Gilbertese
+gla	gd	Scottish Gaelic
+gle	ga	Irish
+glg	gl	Galician
+glv	gv	Manx
+gmh		Middle High German (ca. 1050-1500)
+goh		Old High German (ca. 750-1050)
+gon		Gondi
+gor		Gorontalo
+got		Gothic
+grb		Grebo
+grc		Greek (ancient, -1453)
+gre	el	Greek (modern, 1453-)
+grn	gn	Guarani
+gsw		Swiss German
+guj	gu	Gujarati
+gwi		Gwichʼin
+hai		Haida
+hat	ht	Haitian
+hau	ha	Hausa
+haw		Hawaiian
+heb	he	Hebrew
+her	hz	Herero
+hil		Hiligaynon
+him		Himachali languages; Western Pahari languages
+hin	hi	Hindi
+hit		Hittite
+hmn		Hmong
+hmo	ho	Hiri Motu
+hrv	hr	Croatian
+hsb		Upper Sorbian
+hun	hu	Hungarian
+hup		Hupa
+iba		Iban
+ibo	ig	Igbo
+ice	is	Icelandic
+ido	io	Ido
+iii	ii	Sichuan Yi
+ijo		Ijo languages
+iku	iu	Inuktitut
+ile	ie	Interlingue
+ilo		Iloko
+ina	ia	Interlingua (International Auxiliary Language Association)
+inc		Indic languages
+ind	id	Indonesian
+ine		Indo-European languages
+inh		Ingush
+ipk	ik	Inupiaq
+ira		Iranian languages
+iro		Iroquoian languages
+ita	it	Italian
+jav	jv	Javanese
+jbo		Lojban
+jpn	ja	Japanese
+jpr		Judeo-Persian
+jrb		Judeo-Arabic
+kaa		Kara-Kalpak
+kab		Kabyle
+kac		Kachin
+kal	kl	Kalaallisut
+kam		Kamba (Kenya)
+kan	kn	Kannada
+kar		Karen languages
+kas	ks	Kashmiri
+kau	kr	Kanuri
+kaw		Kawi
+kaz	kk	Kazakh
+kbd		Kabardian
+kha		Khasi
+khi		Khoisan languages
+khm	km	Khmer
+kho		Khotanese
+kik	ki	Kikuyu
+kin	rw	Kinyarwanda
+kir	ky	Kirghiz
+kmb		Kimbundu
+kok		Konkani (macrolanguage)
+kom	kv	Komi
+kon	kg	Kongo
+kor	ko	Korean
+kos		Kosraean
+kpe		Kpelle
+krc		Karachay-Balkar
+krl		Karelian
+kro		Kru languages
+kru		Kurukh
+kua	kj	Kuanyama
+kum		Kumyk
+kur	ku	Kurdish
+kut		Kutenai
+lad		Ladino
+lah		Lahnda
+lam		Lamba
+lao	lo	Lao
+lat	la	Latin
+lav	lv	Latvian
+lez		Lezghian
+lim	li	Limburgan
+lin	ln	Lingala
+lit	lt	Lithuanian
+lol		Mongo
+loz		Lozi
+ltz	lb	Luxembourgish
+lua		Luba-Lulua
+lub	lu	Luba-Katanga
+lug	lg	Ganda
+lui		Luiseno
+lun		Lunda
+luo		Luo (Kenya and Tanzania)
+lus		Lushai
+mac	mk	Macedonian
+mad		Madurese
+mag		Magahi
+mah	mh	Marshallese
+mai		Maithili
+mak		Makasar
+mal	ml	Malayalam
+man		Mandingo
+mao	mi	Maori
+map		Austronesian languages
+mar	mr	Marathi
+mas		Masai
+may	ms	Malay (macrolanguage)
+mdf		Moksha
+mdr		Mandar
+men		Mende (Sierra Leone)
+mga		Middle Irish (900-1200)
+mic		Mi'kmaq
+min		Minangkabau
+mis		Uncoded languages
+mkh		Mon-Khmer languages
+mlg	mg	Malagasy
+mlt	mt	Maltese
+mnc		Manchu
+mni		Manipuri
+mno		Manobo languages
+moh		Mohawk
+mon	mn	Mongolian
+mos		Mossi
+mul		Multiple languages
+mun		Munda languages
+mus		Creek
+mwl		Mirandese
+mwr		Marwari
+myn		Mayan languages
+myv		Erzya
+nah		Nahuatl languages
+nai		North American Indian languages
+nap		Neapolitan
+nau	na	Nauru
+nav	nv	Navajo
+nbl	nr	South Ndebele
+nde	nd	North Ndebele
+ndo	ng	Ndonga
+nds		Low German
+nep	ne	Nepali (macrolanguage)
+new		Newari
+nia		Nias
+nic		Niger-Kordofanian languages
+niu		Niuean
+nno	nn	Norwegian Nynorsk
+nob	nb	Norwegian Bokmål
+nog		Nogai
+non		Old Norse
+nor	no	Norwegian
+nqo		N'Ko
+nso		Pedi
+nub		Nubian languages
+nwc		Classical Newari
+nya	ny	Nyanja
+nym		Nyamwezi
+nyn		Nyankole
+nyo		Nyoro
+nzi		Nzima
+oci	oc	Occitan (post 1500)
+oji	oj	Ojibwa
+ori	or	Oriya (macrolanguage)
+orm	om	Oromo
+osa		Osage
+oss	os	Ossetian
+ota		Ottoman Turkish (1500-1928)
+oto		Otomian languages
+paa		Papuan languages
+pag		Pangasinan
+pal		Pahlavi
+pam		Pampanga
+pan	pa	Panjabi
+pap		Papiamento
+pau		Palauan
+peo		Old Persian (ca. 600-400 B.C.)
+per	fa	Persian
+phi		Philippine languages
+phn		Phoenician
+pli	pi	Pali
+pol	pl	Polish
+pon		Pohnpeian
+por	pt	Portuguese
+pra		Prakrit languages
+pro		Old Provençal (to 1500)
+pus	ps	Pushto
+qaa		Reserved for local use: qaa
+qaa-qtz		Reserved for local use
+qab		Reserved for local use: qab
+qac		Reserved for local use: qac
+qad		Reserved for local use: qad
+qae		Reserved for local use: qae
+qaf		Reserved for local use: qaf
+qag		Reserved for local use: qag
+qah		Reserved for local use: qah
+qai		Reserved for local use: qai
+qaj		Reserved for local use: qaj
+qak		Reserved for local use: qak
+qal		Reserved for local use: qal
+qam		Reserved for local use: qam
+qan		Reserved for local use: qan
+qao		Reserved for local use: qao
+qap		Reserved for local use: qap
+qaq		Reserved for local use: qaq
+qar		Reserved for local use: qar
+qas		Reserved for local use: qas
+qat		Reserved for local use: qat
+qau		Reserved for local use: qau
+qav		Reserved for local use: qav
+qaw		Reserved for local use: qaw
+qax		Reserved for local use: qax
+qay		Reserved for local use: qay
+qaz		Reserved for local use: qaz
+qba		Reserved for local use: qba
+qbb		Reserved for local use: qbb
+qbc		Reserved for local use: qbc
+qbd		Reserved for local use: qbd
+qbe		Reserved for local use: qbe
+qbf		Reserved for local use: qbf
+qbg		Reserved for local use: qbg
+qbh		Reserved for local use: qbh
+qbi		Reserved for local use: qbi
+qbj		Reserved for local use: qbj
+qbk		Reserved for local use: qbk
+qbl		Reserved for local use: qbl
+qbm		Reserved for local use: qbm
+qbn		Reserved for local use: qbn
+qbo		Reserved for local use: qbo
+qbp		Reserved for local use: qbp
+qbq		Reserved for local use: qbq
+qbr		Reserved for local use: qbr
+qbs		Reserved for local use: qbs
+qbt		Reserved for local use: qbt
+qbu		Reserved for local use: qbu
+qbv		Reserved for local use: qbv
+qbw		Reserved for local use: qbw
+qbx		Reserved for local use: qbx
+qby		Reserved for local use: qby
+qbz		Reserved for local use: qbz
+qca		Reserved for local use: qca
+qcb		Reserved for local use: qcb
+qcc		Reserved for local use: qcc
+qcd		Reserved for local use: qcd
+qce		Reserved for local use: qce
+qcf		Reserved for local use: qcf
+qcg		Reserved for local use: qcg
+qch		Reserved for local use: qch
+qci		Reserved for local use: qci
+qcj		Reserved for local use: qcj
+qck		Reserved for local use: qck
+qcl		Reserved for local use: qcl
+qcm		Reserved for local use: qcm
+qcn		Reserved for local use: qcn
+qco		Reserved for local use: qco
+qcp		Reserved for local use: qcp
+qcq		Reserved for local use: qcq
+qcr		Reserved for local use: qcr
+qcs		Reserved for local use: qcs
+qct		Reserved for local use: qct
+qcu		Reserved for local use: qcu
+qcv		Reserved for local use: qcv
+qcw		Reserved for local use: qcw
+qcx		Reserved for local use: qcx
+qcy		Reserved for local use: qcy
+qcz		Reserved for local use: qcz
+qda		Reserved for local use: qda
+qdb		Reserved for local use: qdb
+qdc		Reserved for local use: qdc
+qdd		Reserved for local use: qdd
+qde		Reserved for local use: qde
+qdf		Reserved for local use: qdf
+qdg		Reserved for local use: qdg
+qdh		Reserved for local use: qdh
+qdi		Reserved for local use: qdi
+qdj		Reserved for local use: qdj
+qdk		Reserved for local use: qdk
+qdl		Reserved for local use: qdl
+qdm		Reserved for local use: qdm
+qdn		Reserved for local use: qdn
+qdo		Reserved for local use: qdo
+qdp		Reserved for local use: qdp
+qdq		Reserved for local use: qdq
+qdr		Reserved for local use: qdr
+qds		Reserved for local use: qds
+qdt		Reserved for local use: qdt
+qdu		Reserved for local use: qdu
+qdv		Reserved for local use: qdv
+qdw		Reserved for local use: qdw
+qdx		Reserved for local use: qdx
+qdy		Reserved for local use: qdy
+qdz		Reserved for local use: qdz
+qea		Reserved for local use: qea
+qeb		Reserved for local use: qeb
+qec		Reserved for local use: qec
+qed		Reserved for local use: qed
+qee		Reserved for local use: qee
+qef		Reserved for local use: qef
+qeg		Reserved for local use: qeg
+qeh		Reserved for local use: qeh
+qei		Reserved for local use: qei
+qej		Reserved for local use: qej
+qek		Reserved for local use: qek
+qel		Reserved for local use: qel
+qem		Reserved for local use: qem
+qen		Reserved for local use: qen
+qeo		Reserved for local use: qeo
+qep		Reserved for local use: qep
+qeq		Reserved for local use: qeq
+qer		Reserved for local use: qer
+qes		Reserved for local use: qes
+qet		Reserved for local use: qet
+qeu		Reserved for local use: qeu
+qev		Reserved for local use: qev
+qew		Reserved for local use: qew
+qex		Reserved for local use: qex
+qey		Reserved for local use: qey
+qez		Reserved for local use: qez
+qfa		Reserved for local use: qfa
+qfb		Reserved for local use: qfb
+qfc		Reserved for local use: qfc
+qfd		Reserved for local use: qfd
+qfe		Reserved for local use: qfe
+qff		Reserved for local use: qff
+qfg		Reserved for local use: qfg
+qfh		Reserved for local use: qfh
+qfi		Reserved for local use: qfi
+qfj		Reserved for local use: qfj
+qfk		Reserved for local use: qfk
+qfl		Reserved for local use: qfl
+qfm		Reserved for local use: qfm
+qfn		Reserved for local use: qfn
+qfo		Reserved for local use: qfo
+qfp		Reserved for local use: qfp
+qfq		Reserved for local use: qfq
+qfr		Reserved for local use: qfr
+qfs		Reserved for local use: qfs
+qft		Reserved for local use: qft
+qfu		Reserved for local use: qfu
+qfv		Reserved for local use: qfv
+qfw		Reserved for local use: qfw
+qfx		Reserved for local use: qfx
+qfy		Reserved for local use: qfy
+qfz		Reserved for local use: qfz
+qga		Reserved for local use: qga
+qgb		Reserved for local use: qgb
+qgc		Reserved for local use: qgc
+qgd		Reserved for local use: qgd
+qge		Reserved for local use: qge
+qgf		Reserved for local use: qgf
+qgg		Reserved for local use: qgg
+qgh		Reserved for local use: qgh
+qgi		Reserved for local use: qgi
+qgj		Reserved for local use: qgj
+qgk		Reserved for local use: qgk
+qgl		Reserved for local use: qgl
+qgm		Reserved for local use: qgm
+qgn		Reserved for local use: qgn
+qgo		Reserved for local use: qgo
+qgp		Reserved for local use: qgp
+qgq		Reserved for local use: qgq
+qgr		Reserved for local use: qgr
+qgs		Reserved for local use: qgs
+qgt		Reserved for local use: qgt
+qgu		Reserved for local use: qgu
+qgv		Reserved for local use: qgv
+qgw		Reserved for local use: qgw
+qgx		Reserved for local use: qgx
+qgy		Reserved for local use: qgy
+qgz		Reserved for local use: qgz
+qha		Reserved for local use: qha
+qhb		Reserved for local use: qhb
+qhc		Reserved for local use: qhc
+qhd		Reserved for local use: qhd
+qhe		Reserved for local use: qhe
+qhf		Reserved for local use: qhf
+qhg		Reserved for local use: qhg
+qhh		Reserved for local use: qhh
+qhi		Reserved for local use: qhi
+qhj		Reserved for local use: qhj
+qhk		Reserved for local use: qhk
+qhl		Reserved for local use: qhl
+qhm		Reserved for local use: qhm
+qhn		Reserved for local use: qhn
+qho		Reserved for local use: qho
+qhp		Reserved for local use: qhp
+qhq		Reserved for local use: qhq
+qhr		Reserved for local use: qhr
+qhs		Reserved for local use: qhs
+qht		Reserved for local use: qht
+qhu		Reserved for local use: qhu
+qhv		Reserved for local use: qhv
+qhw		Reserved for local use: qhw
+qhx		Reserved for local use: qhx
+qhy		Reserved for local use: qhy
+qhz		Reserved for local use: qhz
+qia		Reserved for local use: qia
+qib		Reserved for local use: qib
+qic		Reserved for local use: qic
+qid		Reserved for local use: qid
+qie		Reserved for local use: qie
+qif		Reserved for local use: qif
+qig		Reserved for local use: qig
+qih		Reserved for local use: qih
+qii		Reserved for local use: qii
+qij		Reserved for local use: qij
+qik		Reserved for local use: qik
+qil		Reserved for local use: qil
+qim		Reserved for local use: qim
+qin		Reserved for local use: qin
+qio		Reserved for local use: qio
+qip		Reserved for local use: qip
+qiq		Reserved for local use: qiq
+qir		Reserved for local use: qir
+qis		Reserved for local use: qis
+qit		Reserved for local use: qit
+qiu		Reserved for local use: qiu
+qiv		Reserved for local use: qiv
+qiw		Reserved for local use: qiw
+qix		Reserved for local use: qix
+qiy		Reserved for local use: qiy
+qiz		Reserved for local use: qiz
+qja		Reserved for local use: qja
+qjb		Reserved for local use: qjb
+qjc		Reserved for local use: qjc
+qjd		Reserved for local use: qjd
+qje		Reserved for local use: qje
+qjf		Reserved for local use: qjf
+qjg		Reserved for local use: qjg
+qjh		Reserved for local use: qjh
+qji		Reserved for local use: qji
+qjj		Reserved for local use: qjj
+qjk		Reserved for local use: qjk
+qjl		Reserved for local use: qjl
+qjm		Reserved for local use: qjm
+qjn		Reserved for local use: qjn
+qjo		Reserved for local use: qjo
+qjp		Reserved for local use: qjp
+qjq		Reserved for local use: qjq
+qjr		Reserved for local use: qjr
+qjs		Reserved for local use: qjs
+qjt		Reserved for local use: qjt
+qju		Reserved for local use: qju
+qjv		Reserved for local use: qjv
+qjw		Reserved for local use: qjw
+qjx		Reserved for local use: qjx
+qjy		Reserved for local use: qjy
+qjz		Reserved for local use: qjz
+qka		Reserved for local use: qka
+qkb		Reserved for local use: qkb
+qkc		Reserved for local use: qkc
+qkd		Reserved for local use: qkd
+qke		Reserved for local use: qke
+qkf		Reserved for local use: qkf
+qkg		Reserved for local use: qkg
+qkh		Reserved for local use: qkh
+qki		Reserved for local use: qki
+qkj		Reserved for local use: qkj
+qkk		Reserved for local use: qkk
+qkl		Reserved for local use: qkl
+qkm		Reserved for local use: qkm
+qkn		Reserved for local use: qkn
+qko		Reserved for local use: qko
+qkp		Reserved for local use: qkp
+qkq		Reserved for local use: qkq
+qkr		Reserved for local use: qkr
+qks		Reserved for local use: qks
+qkt		Reserved for local use: qkt
+qku		Reserved for local use: qku
+qkv		Reserved for local use: qkv
+qkw		Reserved for local use: qkw
+qkx		Reserved for local use: qkx
+qky		Reserved for local use: qky
+qkz		Reserved for local use: qkz
+qla		Reserved for local use: qla
+qlb		Reserved for local use: qlb
+qlc		Reserved for local use: qlc
+qld		Reserved for local use: qld
+qle		Reserved for local use: qle
+qlf		Reserved for local use: qlf
+qlg		Reserved for local use: qlg
+qlh		Reserved for local use: qlh
+qli		Reserved for local use: qli
+qlj		Reserved for local use: qlj
+qlk		Reserved for local use: qlk
+qll		Reserved for local use: qll
+qlm		Reserved for local use: qlm
+qln		Reserved for local use: qln
+qlo		Reserved for local use: qlo
+qlp		Reserved for local use: qlp
+qlq		Reserved for local use: qlq
+qlr		Reserved for local use: qlr
+qls		Reserved for local use: qls
+qlt		Reserved for local use: qlt
+qlu		Reserved for local use: qlu
+qlv		Reserved for local use: qlv
+qlw		Reserved for local use: qlw
+qlx		Reserved for local use: qlx
+qly		Reserved for local use: qly
+qlz		Reserved for local use: qlz
+qma		Reserved for local use: qma
+qmb		Reserved for local use: qmb
+qmc		Reserved for local use: qmc
+qmd		Reserved for local use: qmd
+qme		Reserved for local use: qme
+qmf		Reserved for local use: qmf
+qmg		Reserved for local use: qmg
+qmh		Reserved for local use: qmh
+qmi		Reserved for local use: qmi
+qmj		Reserved for local use: qmj
+qmk		Reserved for local use: qmk
+qml		Reserved for local use: qml
+qmm		Reserved for local use: qmm
+qmn		Reserved for local use: qmn
+qmo		Reserved for local use: qmo
+qmp		Reserved for local use: qmp
+qmq		Reserved for local use: qmq
+qmr		Reserved for local use: qmr
+qms		Reserved for local use: qms
+qmt		Reserved for local use: qmt
+qmu		Reserved for local use: qmu
+qmv		Reserved for local use: qmv
+qmw		Reserved for local use: qmw
+qmx		Reserved for local use: qmx
+qmy		Reserved for local use: qmy
+qmz		Reserved for local use: qmz
+qna		Reserved for local use: qna
+qnb		Reserved for local use: qnb
+qnc		Reserved for local use: qnc
+qnd		Reserved for local use: qnd
+qne		Reserved for local use: qne
+qnf		Reserved for local use: qnf
+qng		Reserved for local use: qng
+qnh		Reserved for local use: qnh
+qni		Reserved for local use: qni
+qnj		Reserved for local use: qnj
+qnk		Reserved for local use: qnk
+qnl		Reserved for local use: qnl
+qnm		Reserved for local use: qnm
+qnn		Reserved for local use: qnn
+qno		Reserved for local use: qno
+qnp		Reserved for local use: qnp
+qnq		Reserved for local use: qnq
+qnr		Reserved for local use: qnr
+qns		Reserved for local use: qns
+qnt		Reserved for local use: qnt
+qnu		Reserved for local use: qnu
+qnv		Reserved for local use: qnv
+qnw		Reserved for local use: qnw
+qnx		Reserved for local use: qnx
+qny		Reserved for local use: qny
+qnz		Reserved for local use: qnz
+qoa		Reserved for local use: qoa
+qob		Reserved for local use: qob
+qoc		Reserved for local use: qoc
+qod		Reserved for local use: qod
+qoe		Reserved for local use: qoe
+qof		Reserved for local use: qof
+qog		Reserved for local use: qog
+qoh		Reserved for local use: qoh
+qoi		Reserved for local use: qoi
+qoj		Reserved for local use: qoj
+qok		Reserved for local use: qok
+qol		Reserved for local use: qol
+qom		Reserved for local use: qom
+qon		Reserved for local use: qon
+qoo		Reserved for local use: qoo
+qop		Reserved for local use: qop
+qoq		Reserved for local use: qoq
+qor		Reserved for local use: qor
+qos		Reserved for local use: qos
+qot		Reserved for local use: qot
+qou		Reserved for local use: qou
+qov		Reserved for local use: qov
+qow		Reserved for local use: qow
+qox		Reserved for local use: qox
+qoy		Reserved for local use: qoy
+qoz		Reserved for local use: qoz
+qpa		Reserved for local use: qpa
+qpb		Reserved for local use: qpb
+qpc		Reserved for local use: qpc
+qpd		Reserved for local use: qpd
+qpe		Reserved for local use: qpe
+qpf		Reserved for local use: qpf
+qpg		Reserved for local use: qpg
+qph		Reserved for local use: qph
+qpi		Reserved for local use: qpi
+qpj		Reserved for local use: qpj
+qpk		Reserved for local use: qpk
+qpl		Reserved for local use: qpl
+qpm		Reserved for local use: qpm
+qpn		Reserved for local use: qpn
+qpo		Reserved for local use: qpo
+qpp		Reserved for local use: qpp
+qpq		Reserved for local use: qpq
+qpr		Reserved for local use: qpr
+qps		Reserved for local use: qps
+qpt		Reserved for local use: qpt
+qpu		Reserved for local use: qpu
+qpv		Reserved for local use: qpv
+qpw		Reserved for local use: qpw
+qpx		Reserved for local use: qpx
+qpy		Reserved for local use: qpy
+qpz		Reserved for local use: qpz
+qqa		Reserved for local use: qqa
+qqb		Reserved for local use: qqb
+qqc		Reserved for local use: qqc
+qqd		Reserved for local use: qqd
+qqe		Reserved for local use: qqe
+qqf		Reserved for local use: qqf
+qqg		Reserved for local use: qqg
+qqh		Reserved for local use: qqh
+qqi		Reserved for local use: qqi
+qqj		Reserved for local use: qqj
+qqk		Reserved for local use: qqk
+qql		Reserved for local use: qql
+qqm		Reserved for local use: qqm
+qqn		Reserved for local use: qqn
+qqo		Reserved for local use: qqo
+qqp		Reserved for local use: qqp
+qqq		Reserved for local use: qqq
+qqr		Reserved for local use: qqr
+qqs		Reserved for local use: qqs
+qqt		Reserved for local use: qqt
+qqu		Reserved for local use: qqu
+qqv		Reserved for local use: qqv
+qqw		Reserved for local use: qqw
+qqx		Reserved for local use: qqx
+qqy		Reserved for local use: qqy
+qqz		Reserved for local use: qqz
+qra		Reserved for local use: qra
+qrb		Reserved for local use: qrb
+qrc		Reserved for local use: qrc
+qrd		Reserved for local use: qrd
+qre		Reserved for local use: qre
+qrf		Reserved for local use: qrf
+qrg		Reserved for local use: qrg
+qrh		Reserved for local use: qrh
+qri		Reserved for local use: qri
+qrj		Reserved for local use: qrj
+qrk		Reserved for local use: qrk
+qrl		Reserved for local use: qrl
+qrm		Reserved for local use: qrm
+qrn		Reserved for local use: qrn
+qro		Reserved for local use: qro
+qrp		Reserved for local use: qrp
+qrq		Reserved for local use: qrq
+qrr		Reserved for local use: qrr
+qrs		Reserved for local use: qrs
+qrt		Reserved for local use: qrt
+qru		Reserved for local use: qru
+qrv		Reserved for local use: qrv
+qrw		Reserved for local use: qrw
+qrx		Reserved for local use: qrx
+qry		Reserved for local use: qry
+qrz		Reserved for local use: qrz
+qsa		Reserved for local use: qsa
+qsb		Reserved for local use: qsb
+qsc		Reserved for local use: qsc
+qsd		Reserved for local use: qsd
+qse		Reserved for local use: qse
+qsf		Reserved for local use: qsf
+qsg		Reserved for local use: qsg
+qsh		Reserved for local use: qsh
+qsi		Reserved for local use: qsi
+qsj		Reserved for local use: qsj
+qsk		Reserved for local use: qsk
+qsl		Reserved for local use: qsl
+qsm		Reserved for local use: qsm
+qsn		Reserved for local use: qsn
+qso		Reserved for local use: qso
+qsp		Reserved for local use: qsp
+qsq		Reserved for local use: qsq
+qsr		Reserved for local use: qsr
+qss		Reserved for local use: qss
+qst		Reserved for local use: qst
+qsu		Reserved for local use: qsu
+qsv		Reserved for local use: qsv
+qsw		Reserved for local use: qsw
+qsx		Reserved for local use: qsx
+qsy		Reserved for local use: qsy
+qsz		Reserved for local use: qsz
+qta		Reserved for local use: qta
+qtb		Reserved for local use: qtb
+qtc		Reserved for local use: qtc
+qtd		Reserved for local use: qtd
+qte		Reserved for local use: qte
+qtf		Reserved for local use: qtf
+qtg		Reserved for local use: qtg
+qth		Reserved for local use: qth
+qti		Reserved for local use: qti
+qtj		Reserved for local use: qtj
+qtk		Reserved for local use: qtk
+qtl		Reserved for local use: qtl
+qtm		Reserved for local use: qtm
+qtn		Reserved for local use: qtn
+qto		Reserved for local use: qto
+qtp		Reserved for local use: qtp
+qtq		Reserved for local use: qtq
+qtr		Reserved for local use: qtr
+qts		Reserved for local use: qts
+qtt		Reserved for local use: qtt
+qtu		Reserved for local use: qtu
+qtv		Reserved for local use: qtv
+qtw		Reserved for local use: qtw
+qtx		Reserved for local use: qtx
+qty		Reserved for local use: qty
+qtz		Reserved for local use: qtz
+que	qu	Quechua
+raj		Rajasthani
+rap		Rapanui
+rar		Rarotongan
+roa		Romance languages
+roh	rm	Romansh
+rom		Romany
+rum	ro	Romanian
+run	rn	Rundi
+rup		Macedo-Romanian
+rus	ru	Russian
+sad		Sandawe
+sag	sg	Sango
+sah		Yakut
+sai		South American Indian languages
+sal		Salishan languages
+sam		Samaritan Aramaic
+san	sa	Sanskrit
+sas		Sasak
+sat		Santali
+scn		Sicilian
+sco		Scots
+sel		Selkup
+sem		Semitic languages
+sga		Old Irish (to 900)
+sgn		Sign Languages
+shn		Shan
+sid		Sidamo
+sin	si	Sinhala
+sio		Siouan languages
+sit		Sino-Tibetan languages
+sla		Slavic languages
+slo	sk	Slovak
+slv	sl	Slovenian
+sma		Southern Sami
+sme	se	Northern Sami
+smi		Sami languages
+smj		Lule Sami
+smn		Inari Sami
+smo	sm	Samoan
+sms		Skolt Sami
+sna	sn	Shona
+snd	sd	Sindhi
+snk		Soninke
+sog		Sogdian
+som	so	Somali
+son		Songhai languages
+sot	st	Southern Sotho
+spa	es	Spanish
+srd	sc	Sardinian
+srn		Sranan Tongo
+srp	sr	Serbian
+srr		Serer
+ssa		Nilo-Saharan languages
+ssw	ss	Swati
+suk		Sukuma
+sun	su	Sundanese
+sus		Susu
+sux		Sumerian
+swa	sw	Swahili (macrolanguage)
+swe	sv	Swedish
+syc		Classical Syriac
+syr		Syriac
+tah	ty	Tahitian
+tai		Tai languages
+tam	ta	Tamil
+tat	tt	Tatar
+tel	te	Telugu
+tem		Timne
+ter		Tereno
+tet		Tetum
+tgk	tg	Tajik
+tgl	tl	Tagalog
+tha	th	Thai
+tib	bo	Tibetan
+tig		Tigre
+tir	ti	Tigrinya
+tiv		Tiv
+tkl		Tokelau
+tlh		Klingon
+tli		Tlingit
+tmh		Tamashek
+tog		Tonga (Nyasa)
+ton	to	Tonga (Tonga Islands)
+tpi		Tok Pisin
+tsi		Tsimshian
+tsn	tn	Tswana
+tso	ts	Tsonga
+tuk	tk	Turkmen
+tum		Tumbuka
+tup		Tupi languages
+tur	tr	Turkish
+tut		Altaic languages
+tvl		Tuvalu
+twi	tw	Twi
+tyv		Tuvinian
+udm		Udmurt
+uga		Ugaritic
+uig	ug	Uighur
+ukr	uk	Ukrainian
+umb		Umbundu
+und		Undetermined
+urd	ur	Urdu
+uzb	uz	Uzbek
+vai		Vai
+ven	ve	Venda
+vie	vi	Vietnamese
+vol	vo	Volapük
+vot		Votic
+wak		Wakashan languages
+wal		Wolaytta
+war		Waray (Philippines)
+was		Washo
+wel	cy	Welsh
+wen		Sorbian languages
+wln	wa	Walloon
+wol	wo	Wolof
+xal		Kalmyk
+xho	xh	Xhosa
+yao		Yao
+yap		Yapese
+yid	yi	Yiddish
+yor	yo	Yoruba
+ypk		Yupik languages
+zap		Zapotec
+zbl		Blissymbols
+zen		Zenaga
+zgh		Standard Moroccan Tamazight
+zha	za	Zhuang
+znd		Zande languages
+zul	zu	Zulu
+zun		Zuni
+zxx		No linguistic content
+zza		Zaza

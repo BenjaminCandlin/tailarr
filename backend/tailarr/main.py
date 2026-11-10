@@ -16,14 +16,18 @@ from .api import films, health, settings
 from .core.config import AppConfig
 from .core.db import make_engine
 from .core.settings_store import get_library_settings
+from .library.media_reader import MediaReader
 from .library.scanner import FilmScanner
 
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Bring the film list up to date in the background as soon as Tailarr starts.
-    app.state.film_scanner.start_if_stale()
+    # (After the scan, the media reader reads the details of new or changed files.)
+    if not app.state.film_scanner.start_if_stale():
+        app.state.media_reader.start()
     yield
+    app.state.media_reader.stop()
 
 
 def create_app(config: AppConfig | None = None) -> FastAPI:
@@ -42,7 +46,8 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         with Session(engine) as session:
             return Path(get_library_settings(session, config).movies_dir)
 
-    app.state.film_scanner = FilmScanner(engine, films_root)
+    app.state.media_reader = MediaReader(engine, films_root)
+    app.state.film_scanner = FilmScanner(engine, films_root, app.state.media_reader.start)
 
     app.include_router(health.router)
     app.include_router(settings.router)

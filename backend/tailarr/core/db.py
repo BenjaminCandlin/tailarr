@@ -8,10 +8,16 @@ from pathlib import Path
 from sqlalchemy import Engine
 from sqlmodel import Field, Session, SQLModel, create_engine
 
-from ..library.models import CACHE_TABLES, LIBRARY_CACHE_VERSION
+from ..library.models import (
+    CACHE_TABLES,
+    LIBRARY_CACHE_VERSION,
+    MEDIA_TABLE_VERSION,
+    MediaRecord,
+)
 from .permissions import create_file
 
 CACHE_VERSION_KEY = "library_cache_version"
+MEDIA_VERSION_KEY = "media_table_version"
 
 
 class Setting(SQLModel, table=True):
@@ -32,21 +38,22 @@ def make_engine(database_path: Path) -> Engine:
         connect_args={"check_same_thread": False, "timeout": 30},
     )
     SQLModel.metadata.create_all(engine)
-    _reset_cache_if_outdated(engine)
+    _reset_if_outdated(engine, CACHE_VERSION_KEY, LIBRARY_CACHE_VERSION, CACHE_TABLES)
+    _reset_if_outdated(engine, MEDIA_VERSION_KEY, MEDIA_TABLE_VERSION, (MediaRecord,))
     return engine
 
 
-def _reset_cache_if_outdated(engine: Engine) -> None:
-    """The library tables only cache what's on disk: rebuild them when their layout changes."""
+def _reset_if_outdated(engine: Engine, key: str, version: int, models: tuple) -> None:
+    """These tables only cache what's on disk: rebuild them when their layout changes."""
     with Session(engine) as session:
-        row = session.get(Setting, CACHE_VERSION_KEY)
-        if row is not None and row.value == str(LIBRARY_CACHE_VERSION):
+        row = session.get(Setting, key)
+        if row is not None and row.value == str(version):
             return
-    tables = [model.__table__ for model in CACHE_TABLES]  # type: ignore[attr-defined]
+    tables = [model.__table__ for model in models]
     SQLModel.metadata.drop_all(engine, tables=tables)
     SQLModel.metadata.create_all(engine, tables=tables)
     with Session(engine) as session:
-        session.merge(Setting(key=CACHE_VERSION_KEY, value=str(LIBRARY_CACHE_VERSION)))
+        session.merge(Setting(key=key, value=str(version)))
         session.commit()
 
 

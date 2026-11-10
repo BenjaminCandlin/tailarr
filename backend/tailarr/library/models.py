@@ -10,6 +10,9 @@ from __future__ import annotations
 from sqlmodel import Field, SQLModel
 
 LIBRARY_CACHE_VERSION = 1  # bump when Film/FilmFile columns change
+# Bump when MediaRecord columns, or the tool output kept in it, change. All files are then
+# read again (slow on a big library), so prefer changing only how stored output is described.
+MEDIA_TABLE_VERSION = 1
 
 
 class Film(SQLModel, table=True):
@@ -44,3 +47,26 @@ class FilmFile(SQLModel, table=True):
 
 
 CACHE_TABLES = (FilmFile, Film)
+
+
+class MediaRecord(SQLModel, table=True):
+    """What's inside one video file (tracks, HDR), as read by mkvmerge and MediaInfo.
+
+    Kept separately from the film tables: reading files is slow (Unraid disks may have
+    to spin up), so this survives library re-scans. A record is up to date while the
+    file's size and modified time are unchanged.
+    """
+
+    path: str = Field(primary_key=True)
+    size: int
+    mtime: float
+    read_at: float
+    raw: str | None = None  # trimmed tool output, JSON (see media/probe.py)
+    error: str | None = None  # plain-English reason the file couldn't be read
+    error_details: str | None = None
+    # Summary for the film list (worked out from `raw`, so it can be redone without
+    # reading the file again when SUMMARY_VERSION changes).
+    summary_version: int = 0
+    hdr: str = ""  # comma-separated: "Dolby Vision,HDR10"
+    dv_profile: str | None = None  # "8.1", "7", "5"
+    resolution: str | None = None  # "4K", "1080p", ...

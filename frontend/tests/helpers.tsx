@@ -4,7 +4,16 @@ import { MemoryRouter } from "react-router";
 import { vi } from "vitest";
 
 import { AppRoutes, makeQueryClient } from "@/App";
-import type { Film, FilmDetail, FilmList, Health, LibrarySettings } from "@/lib/api";
+import type {
+  Film,
+  FilmDetail,
+  FilmList,
+  Health,
+  LibrarySettings,
+  Media,
+  MediaSummary,
+  Track,
+} from "@/lib/api";
 import { ThemeProvider } from "@/lib/theme";
 
 export const HEALTH: Health = {
@@ -69,6 +78,12 @@ export const LIBRARY: LibrarySettings = {
   path_mappings: [],
 };
 
+export function summary(extra: Partial<MediaSummary> = {}): MediaSummary {
+  return { read: true, error: false, hdr: [], dv_profile: null, resolution: "1080p", ...extra };
+}
+
+const DV81 = summary({ hdr: ["Dolby Vision", "HDR10"], dv_profile: "8.1", resolution: "4K" });
+
 function film(id: number, title: string, year: number | null, extra: Partial<Film> = {}): Film {
   return {
     id,
@@ -81,6 +96,7 @@ function film(id: number, title: string, year: number | null, extra: Partial<Fil
     file_count: 1,
     main_file: `${title}.mkv`,
     is_mkv: true,
+    media: summary(),
     ...extra,
   };
 }
@@ -88,12 +104,22 @@ function film(id: number, title: string, year: number | null, extra: Partial<Fil
 export const FILMS: FilmList = {
   root: "/data/media/movies",
   films: [
-    film(3, "Ärger im Paradies", 2020),
-    film(1, "Bright Lights", 2019, { poster_url: "/api/films/1/poster?v=1" }),
-    film(5, "Colour Test", 2023, { file_count: 2 }),
+    film(3, "Ärger im Paradies", 2020, {
+      media: summary({ hdr: ["HDR10+", "HDR10"], resolution: "4K" }),
+    }),
+    film(1, "Bright Lights", 2019, {
+      poster_url: "/api/films/1/poster?v=1",
+      media: summary({ hdr: ["HDR10"], resolution: "4K" }),
+    }),
+    film(5, "Colour Test", 2023, { file_count: 2, media: DV81 }),
     film(2, "The Long Weekend", 1999, { folder_name: "The Long Weekend (1999) {tmdb-10001}" }),
-    film(4, "Old Home Video", 1995, { is_mkv: false, main_file: "Old Home Video.mp4" }),
+    film(4, "Old Home Video", 1995, {
+      is_mkv: false,
+      main_file: "Old Home Video.mp4",
+      media: summary({ read: false, resolution: null }),
+    }),
   ],
+  reading: { running: false, done: 0, total: 0 },
   scan: {
     running: false,
     started_at: "2026-11-09T10:00:00Z",
@@ -118,6 +144,7 @@ export const FILM_DETAIL: FilmDetail = {
       is_copy: false,
       is_main: true,
       hardlinked: true,
+      media: DV81,
     },
     {
       name: "Colour Test (2023) WEBDL-2160p DV HDR10 - HDR10.mkv",
@@ -127,7 +154,107 @@ export const FILM_DETAIL: FilmDetail = {
       is_copy: true,
       is_main: false,
       hardlinked: false,
+      media: summary({ hdr: ["HDR10"], resolution: "4K" }),
     },
+  ],
+};
+
+export function track(id: number, extra: Partial<Track>): Track {
+  return {
+    id,
+    type: "audio",
+    codec: "AAC",
+    codec_id: "A_AAC",
+    language: "eng",
+    language_name: "English",
+    name: "",
+    default: false,
+    forced: false,
+    enabled: true,
+    hearing_impaired: false,
+    visual_impaired: false,
+    commentary: false,
+    original: false,
+    width: null,
+    height: null,
+    resolution: null,
+    frame_rate: null,
+    bit_depth: null,
+    hdr: null,
+    channels: null,
+    channel_layout: null,
+    sample_rate: null,
+    picture_based: null,
+    ...extra,
+  };
+}
+
+const DV81_HDR = {
+  formats: ["Dolby Vision", "HDR10"],
+  dv_profile: "8.1",
+  dv_fallback: "HDR10",
+  dv_dual_layer: false,
+  can_remove_dv: true,
+};
+
+export const MEDIA: Media = {
+  file: "Colour Test (2023) WEBDL-2160p DV HDR10.mkv",
+  size: 4 * 1024 ** 3,
+  read_at: "2026-11-10T10:00:00Z",
+  error: null,
+  error_details: null,
+  container: "Matroska",
+  title: "",
+  duration: 8040,
+  resolution: "4K",
+  hdr: DV81_HDR,
+  hdr_checked: true,
+  chapters: 12,
+  attachments: [{ name: "cover.jpg", mime_type: "image/jpeg", size: 1000 }],
+  tracks: [
+    track(0, {
+      type: "video",
+      codec: "HEVC (H.265)",
+      codec_id: "V_MPEGH/ISO/HEVC",
+      language: "und",
+      language_name: "Unknown language",
+      width: 3840,
+      height: 2160,
+      resolution: "4K",
+      frame_rate: "23.976",
+      bit_depth: 10,
+      hdr: DV81_HDR,
+      default: true,
+    }),
+    track(1, {
+      codec: "Dolby TrueHD Atmos",
+      codec_id: "A_TRUEHD",
+      channel_layout: "7.1",
+      name: "TrueHD Atmos 7.1",
+      default: true,
+      original: true,
+    }),
+    track(2, {
+      codec: "Dolby Digital",
+      channel_layout: "5.1",
+      language: "fre",
+      language_name: "French",
+      name: "Français",
+    }),
+    track(3, {
+      type: "subtitles",
+      codec: "PGS",
+      picture_based: true,
+      name: "English (Forced)",
+      forced: true,
+    }),
+    track(4, {
+      type: "subtitles",
+      codec: "SRT",
+      picture_based: false,
+      name: "English SDH",
+      hearing_impaired: true,
+    }),
   ],
 };
 
@@ -150,6 +277,10 @@ export function mockBackend(handler?: Handler) {
     if (url.endsWith("/api/settings/library")) return json(LIBRARY);
     if (url.endsWith("/api/films")) return json(FILMS);
     if (url.endsWith("/api/films/5")) return json(FILM_DETAIL);
+    if (url.includes("/api/films/5/media")) {
+      const file = new URL(url, "http://x").searchParams.get("file") ?? MEDIA.file;
+      return json({ ...MEDIA, file });
+    }
     return json({ detail: "Not found" }, 404);
   });
 }
