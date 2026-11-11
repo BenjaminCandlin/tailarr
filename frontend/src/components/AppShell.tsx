@@ -1,13 +1,15 @@
 import { NavLink, Outlet, useLocation } from "react-router";
 
+import { useJobCounts } from "@/lib/jobs";
 import { cn } from "@/lib/utils";
 
 import { Logo } from "./Logo";
 import { NAV_ITEMS } from "./nav";
 
-/** Number of jobs running, shown as a badge on Queue. Comes from the job queue (Stage 4). */
+/** Number of jobs running or waiting, shown as a badge on Queue. */
 function useRunningJobs(): number {
-  return 0;
+  const counts = useJobCounts();
+  return counts.data ? counts.data.running + counts.data.queued : 0;
 }
 
 function QueueCount({ count, className }: { count: number; className?: string }) {
@@ -18,7 +20,7 @@ function QueueCount({ count, className }: { count: number; className?: string })
         "rounded-full bg-primary px-1.5 text-[11px] leading-5 font-semibold text-primary-foreground",
         className,
       )}
-      aria-label={`${count} running`}
+      aria-label={`${count} running or waiting`}
     >
       {count}
     </span>

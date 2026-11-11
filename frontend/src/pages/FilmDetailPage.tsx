@@ -183,6 +183,7 @@ function FilmDetail({ film }: { film: FilmDetailData }) {
                 key={selected.name}
                 queryKey={["films", String(film.id), "media", selected.name]}
                 load={(refresh) => api.filmMedia(film.id, selected.name, refresh)}
+                edit={selected.is_mkv ? { filmId: film.id, file: selected.name } : undefined}
               />
             </CardContent>
           </Card>

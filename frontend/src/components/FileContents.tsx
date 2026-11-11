@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, FileWarning, Info, RefreshCw } from "lucide-react";
 
+import { TrackSettingsEditor } from "@/components/TrackSettingsEditor";
 import { TrackTable } from "@/components/TrackTable";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -114,9 +115,12 @@ function Loading() {
 export function FileContents({
   queryKey,
   load,
+  edit,
 }: {
   queryKey: unknown[];
   load: (refresh: boolean) => Promise<Media>;
+  /** Allow changing track settings (MKV files only). */
+  edit?: { filmId: number; file: string };
 }) {
   const queryClient = useQueryClient();
   const media = useQuery({ queryKey, queryFn: () => load(false), retry: false });
@@ -168,7 +172,11 @@ export function FileContents({
         </p>
       )}
       <HdrNote media={data} />
-      <TrackTable tracks={data.tracks} />
+      {edit ? (
+        <TrackSettingsEditor filmId={edit.filmId} file={edit.file} tracks={data.tracks} />
+      ) : (
+        <TrackTable tracks={data.tracks} />
+      )}
     </div>
   );
 }

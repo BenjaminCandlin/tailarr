@@ -24,7 +24,7 @@ from sqlmodel import Session, col, select
 
 from ..core.paths import is_inside
 from ..media.probe import MediaDetails, ReadError, describe, read_file
-from .models import FilmFile, MediaRecord
+from .models import Film, FilmFile, MediaRecord
 
 log = logging.getLogger(__name__)
 
@@ -106,6 +106,27 @@ class MediaReader:
                 session.commit()
             return record
         return read_and_store(session, path, stat.st_size, stat.st_mtime)
+
+    def file_changed(self, path: str) -> None:
+        """Tailarr has just changed this file: update the library's record of it and read it.
+
+        Without this the film page would show the file as "not read yet" until the next
+        library scan, because its size or date no longer match what the scan saw.
+        """
+        stat = os.stat(path)
+        with Session(self._engine) as session:
+            for row in session.exec(select(FilmFile).where(FilmFile.path == path)).all():
+                row.size, row.mtime, row.links = stat.st_size, stat.st_mtime, stat.st_nlink
+                session.add(row)
+                film = session.get(Film, row.film_id)
+                if film is not None:
+                    siblings = session.exec(
+                        select(FilmFile).where(FilmFile.film_id == row.film_id)
+                    ).all()
+                    film.size = sum(f.size for f in siblings)
+                    session.add(film)
+            session.commit()
+            read_and_store(session, path, stat.st_size, stat.st_mtime)
 
     # -- status -------------------------------------------------------------------
     def status(self) -> ReaderStatus:

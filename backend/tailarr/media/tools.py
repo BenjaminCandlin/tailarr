@@ -10,6 +10,9 @@ import os
 import re
 import shutil
 import subprocess
+import threading
+import time
+from collections.abc import Callable
 from dataclasses import dataclass
 
 
@@ -122,3 +125,100 @@ def tool_version(tool: ToolInfo) -> str | None:
     except ToolError:
         return None
     return parse_version(result.stdout + "\n" + result.stderr)
+
+
+# --------------------------------------------------------------------------- long-running jobs
+
+
+class ToolCancelled(ToolError):
+    """The owner cancelled the job while the tool was running; the tool was stopped."""
+
+    def __init__(self, name: str) -> None:
+        super().__init__(f"'{name}' was stopped because the job was cancelled.")
+
+
+_GUI_PROGRESS = re.compile(r"^#GUI#progress\s+(\d+)%")
+
+
+def parse_progress(line: str) -> int | None:
+    """The percentage in an MKVToolNix '--gui-mode' progress line, e.g. '#GUI#progress 42%'."""
+    match = _GUI_PROGRESS.match(line.strip())
+    return int(match.group(1)) if match else None
+
+
+def run_tool_live(
+    name: str,
+    args: list[str],
+    *,
+    on_progress: Callable[[int], None] | None = None,
+    cancel: threading.Event | None = None,
+    timeout: float | None = None,
+) -> ToolResult:
+    """Run a long tool, reporting progress and stopping it if `cancel` is set.
+
+    MKVToolNix tools are given '--gui-mode' so they print '#GUI#progress N%' lines.
+    The tool's own words (stdout and stderr together) are kept for technical details.
+    """
+    path = find_tool(name)
+    if path is None:
+        raise ToolError(f"The program '{name}' isn't installed in the Tailarr container.")
+    if name.startswith("mkv") and "--gui-mode" not in args:
+        args = ["--gui-mode", *args]
+    try:
+        proc = subprocess.Popen(
+            [path, *args],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            env=_tool_env(),
+        )
+    except OSError as exc:
+        raise ToolError(f"'{name}' couldn't be started.", str(exc)) from exc
+
+    stopped: list[str] = []
+    finished = threading.Event()
+
+    def watch() -> None:
+        # Stop the tool if the job is cancelled or it runs for too long.
+        deadline = None if timeout is None else time.monotonic() + timeout
+        while not finished.wait(0.2):
+            if cancel is not None and cancel.is_set():
+                stopped.append("cancelled")
+            elif deadline is not None and time.monotonic() > deadline:
+                stopped.append("timeout")
+            else:
+                continue
+            proc.terminate()
+            try:
+                proc.wait(10)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+            return
+
+    watcher = threading.Thread(target=watch, name=f"watch-{name}", daemon=True)
+    watcher.start()
+    lines: list[str] = []
+    try:
+        assert proc.stdout is not None
+        for line in proc.stdout:
+            percent = parse_progress(line)
+            if percent is not None:
+                if on_progress is not None:
+                    on_progress(percent)
+                continue
+            lines.append(line.rstrip("\n"))
+        proc.wait()
+    finally:
+        finished.set()
+        watcher.join()
+    output = "\n".join(lines[-200:])  # the end is where errors are
+    if stopped and stopped[0] == "cancelled":
+        raise ToolCancelled(name)
+    if stopped:
+        raise ToolError(f"'{name}' took too long and was stopped.", output)
+    ok_codes = {0, 1} if name.startswith("mkv") else {0}
+    if proc.returncode not in ok_codes:
+        raise ToolError(f"'{name}' reported a problem (exit code {proc.returncode}).", output)
+    return ToolResult(proc.returncode, output, "")

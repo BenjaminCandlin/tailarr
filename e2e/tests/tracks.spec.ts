@@ -81,13 +81,9 @@ test("a film's tracks, with friendly names", async ({ page }) => {
   await expect(trackRow(page, 2)).toContainText("Français 5.1");
   await expect(trackRow(page, 3)).toContainText("Japanese");
   await expect(trackRow(page, 5)).toContainText("English (Forced)");
-  if (isPhone(page)) {
-    await expect(trackRow(page, 5).getByText("Forced", { exact: true })).toBeVisible();
-    await expect(trackRow(page, 4).getByText("Default", { exact: true })).toBeVisible();
-  } else {
-    await expect(trackRow(page, 5).getByText("Forced: yes")).toBeAttached();
-    await expect(trackRow(page, 4).getByText("Default: yes")).toBeAttached();
-  }
+  await expect(trackRow(page, 5).getByRole("switch", { name: /^Forced/ })).toBeChecked();
+  await expect(trackRow(page, 4).getByRole("switch", { name: /^Default/ })).toBeChecked();
+  await expect(trackRow(page, 6).getByRole("switch", { name: /^Default/ })).not.toBeChecked();
   await expect(trackRow(page, 7)).toContainText("Spanish");
   await expectNoSideways(page);
 });

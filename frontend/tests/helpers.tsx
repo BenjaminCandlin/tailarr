@@ -5,6 +5,7 @@ import { vi } from "vitest";
 
 import { AppRoutes, makeQueryClient } from "@/App";
 import type {
+  Job,
   Film,
   FilmDetail,
   FilmList,
@@ -162,6 +163,7 @@ export const FILM_DETAIL: FilmDetail = {
 export function track(id: number, extra: Partial<Track>): Track {
   return {
     id,
+    uid: String(9000 + id),
     type: "audio",
     codec: "AAC",
     codec_id: "A_AAC",
@@ -275,6 +277,8 @@ export function mockBackend(handler?: Handler) {
     if (custom) return custom;
     if (url.endsWith("/api/health")) return json(HEALTH);
     if (url.endsWith("/api/settings/library")) return json(LIBRARY);
+    if (url.endsWith("/api/jobs/counts")) return json({ running: 0, queued: 0 });
+    if (url.endsWith("/api/jobs")) return json({ jobs: [], counts: { running: 0, queued: 0 } });
     if (url.endsWith("/api/films")) return json(FILMS);
     if (url.endsWith("/api/films/5")) return json(FILM_DETAIL);
     if (url.includes("/api/films/5/media")) {
@@ -295,4 +299,30 @@ export function renderApp(path = "/films") {
       </QueryClientProvider>
     </ThemeProvider>,
   );
+}
+
+export function job(extra: Partial<Job> = {}): Job {
+  return {
+    id: 42,
+    kind: "track_settings",
+    title: "Change track settings",
+    subject: "Colour Test (2023)",
+    file_name: MEDIA.file,
+    film_id: 5,
+    group_id: null,
+    status: "queued",
+    step: "",
+    step_number: 0,
+    step_count: 0,
+    progress: null,
+    cancellable: true,
+    cancel_requested: false,
+    created_at: "2026-11-11T10:00:00Z",
+    started_at: null,
+    finished_at: null,
+    message: null,
+    error: null,
+    error_details: null,
+    ...extra,
+  };
 }
