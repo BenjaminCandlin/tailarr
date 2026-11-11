@@ -8,6 +8,7 @@ from pathlib import Path
 from sqlalchemy import Engine
 from sqlmodel import Field, Session, SQLModel, create_engine
 
+from ..connections import models as _connection_models  # noqa: F401  (tables)
 from ..jobs.models import JOB_TABLE_VERSION, Job
 from ..library.models import (
     CACHE_TABLES,
@@ -17,6 +18,7 @@ from ..library.models import (
     TV_TABLES,
     MediaRecord,
 )
+from ..rules import models as _rule_models  # noqa: F401  (tables)
 from .permissions import create_file
 
 CACHE_VERSION_KEY = "library_cache_version"

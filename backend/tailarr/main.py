@@ -13,7 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlmodel import Session, select
 
 from . import __version__
-from .api import actions, connections, films, health, jobs, settings, tv
+from .api import actions, connections, films, health, jobs, rules, settings, tv
 from .connections.service import Connections
 from .core.config import AppConfig
 from .core.db import make_engine
@@ -144,6 +144,7 @@ def create_app(config: AppConfig | None = None, *, transport: object | None = No
     app.include_router(actions.make_router("/api/episodes", tv.load_episode))
     app.include_router(tv.languages_router)
     app.include_router(connections.router)
+    app.include_router(rules.router)
     app.include_router(jobs.router)
 
     _mount_frontend(app, config.static_dir)
