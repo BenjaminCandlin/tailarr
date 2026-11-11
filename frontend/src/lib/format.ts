@@ -55,3 +55,12 @@ export function formatDuration(seconds: number): string {
   if (hours === 0) return `${minutes} min`;
   return rest ? `${hours} h ${rest} min` : `${hours} h`;
 }
+
+/** A running time: "4 s", "2 min 05 s", "1 h 03 min". */
+export function formatElapsed(seconds: number): string {
+  const s = Math.max(0, Math.floor(seconds));
+  if (s < 60) return `${s} s`;
+  const minutes = Math.floor(s / 60);
+  if (minutes < 60) return `${minutes} min ${String(s % 60).padStart(2, "0")} s`;
+  return `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, "0")} min`;
+}

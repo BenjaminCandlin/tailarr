@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Literal
@@ -13,8 +14,14 @@ from sqlalchemy.orm import defer
 from sqlmodel import Session, col, select
 
 from ..core.config import AppConfig
+from ..core.disk import free_space
 from ..core.paths import is_inside
 from ..core.settings_store import get_library_settings
+from ..jobs.engine import JobQueue
+from ..jobs.track_settings import HARDLINK_REFUSAL, TrackChange, TracksChangedError
+from ..jobs.track_settings import KIND as TRACK_SETTINGS
+from ..jobs.track_settings import TITLE as TRACK_SETTINGS_TITLE
+from ..jobs.track_settings import plan as plan_track_settings
 from ..library.artwork import thumbnail
 from ..library.media_reader import MediaReader, details_of, is_current
 from ..library.models import Film, FilmFile, MediaRecord
@@ -22,6 +29,7 @@ from ..library.scanner import FilmScanner
 from ..media.describe import HdrInfo
 from ..media.probe import MediaDetails
 from .deps import get_config, get_session
+from .jobs import JobOut, get_queue, job_out
 
 router = APIRouter(prefix="/api/films")
 
@@ -271,6 +279,7 @@ class HdrOut(BaseModel):
 
 class TrackOut(BaseModel):
     id: int
+    uid: str
     type: Literal["video", "audio", "subtitles"]
     codec: str
     codec_id: str
@@ -428,3 +437,131 @@ def film_backdrop(
     session: Annotated[Session, Depends(get_session)],
 ) -> Response:
     return FileResponse(_artwork(session, config, film_id, "backdrop"), headers=_LONG_CACHE)
+
+
+# -- changing track settings ---------------------------------------------------------
+
+
+class TrackSettingsIn(BaseModel):
+    file: str
+    changes: list[TrackChange]
+
+
+class TrackSettingsConfirmIn(TrackSettingsIn):
+    # The owner pressed the confirm button in the summary.
+    confirmed: bool = False
+    # The owner ticked "I understand" for a hardlinked (seeding) file.
+    allow_hardlinked: bool = False
+
+
+class PlannedTrackOut(BaseModel):
+    uid: str
+    label: str
+    changes: list[str]
+
+
+class TrackSettingsPreviewOut(BaseModel):
+    """What saving would do, for the summary shown before anything changes."""
+
+    film_id: int
+    file: str
+    path: str
+    tracks: list[PlannedTrackOut]
+    hardlinked: bool  # the file is also in another folder (usually still seeding)
+    free_space: int  # bytes free on the disk holding the file
+
+
+def _mkv_file(session: Session, config: AppConfig, film: Film, name: str) -> FilmFile:
+    match = next((f for f in _files(session, film) if f.name == name), None)
+    if match is None or not is_inside(match.path, _films_root(session, config)):
+        raise HTTPException(status_code=404, detail="This file isn't in the film's folder.")
+    if not match.is_mkv:
+        raise HTTPException(
+            status_code=400, detail="Tailarr can only change track settings in MKV files."
+        )
+    return match
+
+
+def _preview(
+    session: Session, config: AppConfig, reader: MediaReader, film_id: int, body: TrackSettingsIn
+) -> TrackSettingsPreviewOut:
+    film = _get_film(session, config, film_id)
+    file = _mkv_file(session, config, film, body.file)
+    if not body.changes:
+        raise HTTPException(status_code=400, detail="No track settings were changed.")
+    try:
+        record = reader.get(session, file.path)
+        stat = os.stat(file.path)
+    except OSError as error:
+        raise HTTPException(
+            status_code=404,
+            detail="This file can't be opened any more. Press “Check for new films” "
+            "on the Films page to bring the list up to date.",
+        ) from error
+    details = details_of(record)
+    if details is None:
+        raise HTTPException(
+            status_code=400, detail="Tailarr couldn't read this file, so it can't change it."
+        )
+    try:
+        planned = plan_track_settings(details, body.changes)
+    except TracksChangedError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    if not planned:
+        raise HTTPException(
+            status_code=400, detail="Nothing to change: the tracks already have these settings."
+        )
+    return TrackSettingsPreviewOut(
+        film_id=film_id,
+        file=file.name,
+        path=file.path,
+        tracks=[PlannedTrackOut(uid=p.uid, label=p.label, changes=p.changes) for p in planned],
+        hardlinked=stat.st_nlink > 1,
+        free_space=free_space(Path(file.path).parent),
+    )
+
+
+@router.post("/{film_id}/track-settings/preview", response_model=TrackSettingsPreviewOut)
+def preview_track_settings(
+    film_id: int,
+    body: TrackSettingsIn,
+    config: Annotated[AppConfig, Depends(get_config)],
+    session: Annotated[Session, Depends(get_session)],
+    reader: Annotated[MediaReader, Depends(get_reader)],
+) -> TrackSettingsPreviewOut:
+    """The summary to confirm before changing a file's track settings. Changes nothing."""
+    return _preview(session, config, reader, film_id, body)
+
+
+@router.post("/{film_id}/track-settings", response_model=JobOut, status_code=202)
+def change_track_settings(
+    film_id: int,
+    body: TrackSettingsConfirmIn,
+    config: Annotated[AppConfig, Depends(get_config)],
+    session: Annotated[Session, Depends(get_session)],
+    reader: Annotated[MediaReader, Depends(get_reader)],
+    queue: Annotated[JobQueue, Depends(get_queue)],
+) -> JobOut:
+    """Queue a job that changes the original file's track settings (after confirmation)."""
+    if not body.confirmed:
+        raise HTTPException(
+            status_code=400,
+            detail="This changes the original file, so it needs your confirmation first.",
+        )
+    preview = _preview(session, config, reader, film_id, body)
+    if preview.hardlinked and not body.allow_hardlinked:
+        raise HTTPException(status_code=409, detail=HARDLINK_REFUSAL)
+    film = _get_film(session, config, film_id)
+    subject = f"{film.title} ({film.year})" if film.year else film.title
+    job = queue.submit(
+        TRACK_SETTINGS,
+        title=TRACK_SETTINGS_TITLE,
+        subject=subject,
+        path=preview.path,
+        film_id=film_id,
+        params={
+            "changes": [c.model_dump(exclude_none=True) for c in body.changes],
+            "allow_hardlinked": body.allow_hardlinked,
+        },
+    )
+    return job_out(job)

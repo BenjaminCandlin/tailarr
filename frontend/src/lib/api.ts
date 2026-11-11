@@ -110,6 +110,8 @@ export type TrackType = "video" | "audio" | "subtitles";
 
 export type Track = {
   id: number;
+  /** The track's unique ID inside the file; used when changing its settings. */
+  uid: string;
   type: TrackType;
   codec: string;
   codec_id: string;
@@ -152,6 +154,56 @@ export type Media = {
   tracks: Track[];
   chapters: number;
   attachments: Attachment[];
+};
+
+export type JobStatus = "queued" | "running" | "done" | "failed" | "cancelled" | "interrupted";
+
+export type Job = {
+  id: number;
+  kind: string;
+  title: string;
+  subject: string;
+  file_name: string;
+  film_id: number | null;
+  group_id: string | null;
+  status: JobStatus;
+  step: string;
+  step_number: number;
+  step_count: number;
+  /** 0–100 for the current step, or null when there's no percentage. */
+  progress: number | null;
+  cancellable: boolean;
+  cancel_requested: boolean;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+  message: string | null;
+  error: string | null;
+  error_details: string | null;
+};
+
+export type JobCounts = { running: number; queued: number };
+
+export type JobList = { jobs: Job[]; counts: JobCounts };
+
+/** The settings wanted for one track; fields left out stay as they are. */
+export type TrackChange = {
+  uid: string;
+  default?: boolean;
+  forced?: boolean;
+  /** An empty name removes the track's name. */
+  name?: string;
+};
+
+export type TrackSettingsRequest = { file: string; changes: TrackChange[] };
+
+export type TrackSettingsPreview = {
+  film_id: number;
+  file: string;
+  path: string;
+  tracks: { uid: string; label: string; changes: string[] }[];
+  hardlinked: boolean;
+  free_space: number;
 };
 
 export class ApiError extends Error {
@@ -211,4 +263,22 @@ export const api = {
       `/api/films/${id}/media?${new URLSearchParams({ file, ...(refresh ? { refresh: "true" } : {}) })}`,
     ),
   rescanFilms: () => request<ScanStatus>("/api/films/scan", { method: "POST" }),
+  previewTrackSettings: (id: number | string, body: TrackSettingsRequest) =>
+    request<TrackSettingsPreview>(`/api/films/${id}/track-settings/preview`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  changeTrackSettings: (
+    id: number | string,
+    body: TrackSettingsRequest & { confirmed: true; allow_hardlinked: boolean },
+  ) =>
+    request<Job>(`/api/films/${id}/track-settings`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  jobs: () => request<JobList>("/api/jobs"),
+  job: (id: number) => request<Job>(`/api/jobs/${id}`),
+  jobCounts: () => request<JobCounts>("/api/jobs/counts"),
+  cancelJob: (id: number) => request<Job>(`/api/jobs/${id}/cancel`, { method: "POST" }),
+  clearFinishedJobs: () => request<{ removed: number }>("/api/jobs/finished", { method: "DELETE" }),
 };

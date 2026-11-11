@@ -8,6 +8,7 @@ from pathlib import Path
 from sqlalchemy import Engine
 from sqlmodel import Field, Session, SQLModel, create_engine
 
+from ..jobs.models import JOB_TABLE_VERSION, Job
 from ..library.models import (
     CACHE_TABLES,
     LIBRARY_CACHE_VERSION,
@@ -18,6 +19,7 @@ from .permissions import create_file
 
 CACHE_VERSION_KEY = "library_cache_version"
 MEDIA_VERSION_KEY = "media_table_version"
+JOB_VERSION_KEY = "job_table_version"
 
 
 class Setting(SQLModel, table=True):
@@ -40,6 +42,7 @@ def make_engine(database_path: Path) -> Engine:
     SQLModel.metadata.create_all(engine)
     _reset_if_outdated(engine, CACHE_VERSION_KEY, LIBRARY_CACHE_VERSION, CACHE_TABLES)
     _reset_if_outdated(engine, MEDIA_VERSION_KEY, MEDIA_TABLE_VERSION, (MediaRecord,))
+    _reset_if_outdated(engine, JOB_VERSION_KEY, JOB_TABLE_VERSION, (Job,))
     return engine
 
 

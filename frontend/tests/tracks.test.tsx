@@ -128,14 +128,16 @@ describe("film page tracks", () => {
     const atmos = within(audio).getByTestId("track-1");
     expect(atmos).toHaveTextContent("English");
     expect(atmos).toHaveTextContent("Dolby TrueHD Atmos · 7.1");
-    expect(within(atmos).getByText("Default: yes")).toBeInTheDocument();
+    expect(within(atmos).getByRole("switch", { name: "Default: Audio 1: English" })).toBeChecked();
     expect(within(atmos).getByText("Original language")).toBeInTheDocument();
     expect(within(audio).getByTestId("track-2")).toHaveTextContent("French");
 
     const subs = screen.getByRole("region", { name: /Subtitles/ });
     const forced = within(subs).getByTestId("track-3");
     expect(forced).toHaveTextContent("PGS (picture-based)");
-    expect(within(forced).getByText("Forced: yes")).toBeInTheDocument();
+    expect(
+      within(forced).getByRole("switch", { name: "Forced: Subtitles 1: English" }),
+    ).toBeChecked();
     expect(within(subs).getByTestId("track-4")).toHaveTextContent("SDH");
 
     const video = screen.getByRole("region", { name: /Video/ });

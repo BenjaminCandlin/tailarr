@@ -117,6 +117,7 @@ def read_file(path: str | Path) -> dict[str, Any]:
 @dataclass
 class Track:
     id: int  # mkvmerge's track number (0, 1, 2, ...)
+    uid: str  # the track's unique ID inside the file (text: too big for JavaScript numbers)
     type: str  # "video", "audio" or "subtitles"
     codec: str  # friendly, e.g. "Dolby TrueHD Atmos"
     codec_id: str
@@ -242,6 +243,7 @@ def describe(raw: dict[str, Any]) -> MediaDetails:
         language = props.get("language") or "und"
         item = Track(
             id=int(track.get("id", 0)),
+            uid=str(props.get("uid") or ""),
             type=kind,
             codec=codec,
             codec_id=codec_id,

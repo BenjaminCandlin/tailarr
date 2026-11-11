@@ -58,6 +58,9 @@
 }
 
 @theme inline {
+  --animate-fade-in: fade-in 150ms ease-out;
+  --animate-sheet-up: sheet-up 220ms ease-out;
+  --animate-progress-slide: progress-slide 1.4s ease-in-out infinite;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -98,5 +101,27 @@
   :focus-visible {
     outline: 2px solid var(--ring);
     outline-offset: 2px;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+/* An "in progress" bar with no percentage: a band sliding across. */
+@keyframes progress-slide {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
   }
 }

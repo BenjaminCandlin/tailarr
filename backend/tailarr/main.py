@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -12,12 +13,16 @@ from fastapi.staticfiles import StaticFiles
 from sqlmodel import Session
 
 from . import __version__
-from .api import films, health, settings
+from .api import films, health, jobs, settings
 from .core.config import AppConfig
 from .core.db import make_engine
 from .core.settings_store import get_library_settings
+from .jobs import track_settings
+from .jobs.engine import JobQueue
 from .library.media_reader import MediaReader
 from .library.scanner import FilmScanner
+
+log = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -26,7 +31,9 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # (After the scan, the media reader reads the details of new or changed files.)
     if not app.state.film_scanner.start_if_stale():
         app.state.media_reader.start()
+    app.state.job_queue.start()
     yield
+    app.state.job_queue.stop()
     app.state.media_reader.stop()
 
 
@@ -49,9 +56,25 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     app.state.media_reader = MediaReader(engine, films_root)
     app.state.film_scanner = FilmScanner(engine, films_root, app.state.media_reader.start)
 
+    def library_roots() -> list[str]:
+        with Session(engine) as session:
+            library = get_library_settings(session, config)
+            return [library.movies_dir, library.tv_dir]
+
+    def file_changed(path: str) -> None:
+        try:
+            app.state.media_reader.file_changed(path)
+        except Exception:  # the job's own result matters more than refreshing the page
+            log.exception("Couldn't re-read %s after changing it", path)
+
+    app.state.job_queue = JobQueue(
+        engine, [track_settings.make_job_type(library_roots, file_changed)]
+    )
+
     app.include_router(health.router)
     app.include_router(settings.router)
     app.include_router(films.router)
+    app.include_router(jobs.router)
 
     _mount_frontend(app, config.static_dir)
     return app
