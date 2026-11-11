@@ -2,6 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
+import { spaceText } from "@/components/ReplaceOriginalDialog";
 import type { RemoveTracksPreview, ReplaceOriginalPreview } from "@/lib/api";
 
 import { FILM_DETAIL, MEDIA, job, json, mockBackend, renderApp } from "./helpers";
@@ -209,6 +210,24 @@ describe("removing tracks", () => {
 });
 
 describe("replacing the original", () => {
+  it("explains disk space: the whole original is freed, not just the difference", () => {
+    const gb = 1024 ** 3;
+    const preview = {
+      ...REPLACE,
+      hardlinked: false,
+      original_size: 7.8 * gb,
+      copy_size: 7.8 * gb - 1.1 * 1024 ** 2,
+    };
+    expect(spaceText(preview)).toBe(
+      "Right now the original and the copy take up 15.6 GB together. When the recycle folder " +
+        "is emptied, the original's 7.8 GB is freed, leaving just the copy. The copy is 1.1 MB " +
+        "smaller than the original, because of the tracks you left out.",
+    );
+    expect(spaceText({ ...preview, hardlinked: true })).toMatch(
+      /its 7\.8 GB is only freed once the recycle folder is emptied and the torrent is removed/,
+    );
+  });
+
   const withCopy = {
     ...FILM_DETAIL,
     files: [
