@@ -34,6 +34,9 @@ NO_RECORD = (
     "Tailarr has no record of making this copy from this file, so it won't use it to "
     "replace the original."
 )
+# An HDR10 copy can replace its original too, but only when the owner chooses it: it
+# loses Dolby Vision for good, so the summary says so, and rules never do it by themselves.
+LOSES_DOLBY_VISION_KIND = "hdr10_copy"
 ORIGINAL_CHANGED = (
     "The original file has changed since this copy was made (perhaps Radarr upgraded it), "
     "so the copy may be out of date. Nothing was changed. Make a new copy from the current "

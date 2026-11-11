@@ -130,3 +130,34 @@ test("remove a track into a copy, then replace the original with it", async ({ p
   const recycle = await (await page.request.get("/api/settings/recycle")).json();
   expect(recycle.file_count).toBe(1);
 });
+
+test("make a copy without Dolby Vision of a UHD Blu-ray style film", async ({ page }) => {
+  await openFilm(page, "Blu-ray Night");
+  await expect(page.getByTestId("hdr-note")).toContainText("Dolby Vision profile 7");
+  await page.getByRole("button", { name: "Make an HDR10 copy…" }).click();
+  const dialog = page.getByRole("dialog", { name: "Make a copy without Dolby Vision?" });
+  await expect(dialog).toContainText("together with the extra Blu-ray picture layer");
+  await dialog.getByRole("button", { name: "Make the HDR10 copy" }).click();
+  await expect(page.getByText("HDR10 copy saved", { exact: true })).toBeVisible({
+    timeout: 60_000,
+  });
+  await page.screenshot({ path: "screenshots/changes-hdr10-done.png", fullPage: true });
+
+  await page.getByRole("button", { name: "Show the copy" }).click();
+  await expect(page).toHaveURL(/file=/);
+  await expect(page.getByTestId("hdr-note")).toContainText("HDR10");
+  await expect(page.getByTestId("hdr-note")).not.toContainText("Dolby Vision");
+  await expect(page.getByTestId("dv-action")).toHaveCount(0);
+  // The copy sits next to the original (a second version in Plex). Replacing the original
+  // is possible, but only on request, with a plain warning that Dolby Vision would be gone.
+  await expect(page.getByText("Made from Blu-ray Night (2018) Remux-2160p.mkv")).toBeVisible();
+  await page.getByRole("button", { name: "Replace the original with this copy…" }).click();
+  const replace = page.getByRole("dialog", { name: "Replace the original with this copy?" });
+  await expect(replace.getByTestId("loses-dolby-vision")).toContainText(
+    "Dolby Vision will be gone from this film",
+  );
+  await page.waitForTimeout(300); // let the dialog finish appearing
+  await page.screenshot({ path: "screenshots/changes-replace-with-hdr10.png" });
+  await replace.getByRole("button", { name: "Cancel" }).click();
+  await expect(replace).toHaveCount(0);
+});

@@ -160,7 +160,7 @@ def test_cancel_stops_a_running_tool_and_removes_temp_files(engine, tmp_path: Pa
         queue.stop()
 
 
-def test_temp_files_removed_after_failure_but_kept_on_success(engine, tmp_path: Path) -> None:
+def test_temp_files_always_removed(engine, tmp_path: Path) -> None:
     def make(ctx: JobContext) -> str:
         path = ctx.temp_path(tmp_path, ".bin")
         path.write_bytes(b"x")
@@ -179,8 +179,9 @@ def test_temp_files_removed_after_failure_but_kept_on_success(engine, tmp_path: 
     finally:
         queue.stop()
     assert not (tmp_path / f".tailarr-tmp-{bad}-1.bin").exists()
-    # A successful job renames its temp files into place itself; the engine leaves them be.
-    assert (tmp_path / f".tailarr-tmp-{good}-1.bin").exists()
+    # A successful job renames its finished file into place first; anything left is a
+    # working file, removed too.
+    assert not (tmp_path / f".tailarr-tmp-{good}-1.bin").exists()
 
 
 def test_restart_marks_running_jobs_interrupted_and_cleans_up(engine, tmp_path: Path) -> None:

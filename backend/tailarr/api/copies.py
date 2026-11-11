@@ -13,7 +13,7 @@ from sqlmodel import Session
 from ..core.config import AppConfig
 from ..core.disk import SAFETY_MARGIN, free_space
 from ..core.settings_store import get_recycle_settings
-from ..jobs import remove_tracks, replace_original
+from ..jobs import hdr10_copy, remove_tracks, replace_original
 from ..jobs.engine import JobFailed, JobQueue
 from ..jobs.models import CopyRecord
 from ..jobs.recycle import RECYCLE_FOLDER
@@ -198,6 +198,8 @@ class ReplaceOriginalPreviewOut(BaseModel):
     hardlinked: bool  # the original is also in the downloads folder (still seeding)
     keep_days: int
     recycle_folder: str
+    # An HDR10 copy: replacing the original removes Dolby Vision from the film for good.
+    loses_dolby_vision: bool
 
 
 def _replace_preview(
@@ -228,6 +230,7 @@ def _replace_preview(
         hardlinked=original_stat.st_nlink > 1,
         keep_days=get_recycle_settings(session).keep_days,
         recycle_folder=str(Path(original.path).parent / RECYCLE_FOLDER),
+        loses_dolby_vision=record.kind == replace_original.LOSES_DOLBY_VISION_KIND,
     )
     return preview, original, copy, film
 
@@ -264,5 +267,148 @@ def start_replace_original(
         path=original.path,
         film_id=film_id,
         params={"copy": copy.path},
+    )
+    return job_out(job)
+
+
+# -- make a copy without Dolby Vision ----------------------------------------------------
+
+
+class Hdr10CopyIn(BaseModel):
+    file: str
+
+
+class Hdr10CopyConfirmIn(Hdr10CopyIn):
+    confirmed: bool = False
+    overwrite: bool = False  # replace an existing Tailarr HDR10 copy
+
+
+class SpaceNeedOut(BaseModel):
+    label: str
+    needed: int
+    free: int
+    enough: bool
+
+
+class Hdr10CopyPreviewOut(BaseModel):
+    film_id: int
+    file: str
+    new_file: str
+    exists: bool
+    dv_profile: str
+    blu_ray_layers: bool  # profile 7 with an enhancement layer, which is left out too
+    result: list[str]  # what players show the copy as, e.g. ["HDR10"], ["HDR10+", "HDR10"]
+    kept: list[str]  # the other tracks, all kept
+    chapters: int
+    attachments: int
+    uses_work_folder: bool
+    space: list[SpaceNeedOut]
+    enough_space: bool
+
+
+def _hdr10_preview(
+    session: Session, config: AppConfig, reader: MediaReader, film_id: int, file_name: str
+) -> tuple[Hdr10CopyPreviewOut, FilmFile]:
+    film = _get_film(session, config, film_id)
+    file = _mkv_file(session, config, film, file_name)
+    try:
+        record = reader.get(session, file.path)
+        size = os.stat(file.path).st_size
+    except OSError as error:
+        raise _cant_open(error) from error
+    details = details_of(record)
+    if details is None:
+        raise HTTPException(
+            status_code=400, detail="Tailarr couldn't read this file, so it can't copy it."
+        )
+    if not details.hdr_checked:
+        raise HTTPException(
+            status_code=400,
+            detail="MediaInfo couldn't read this file, so Tailarr can't tell how its Dolby "
+            "Vision is stored. Try \u201cTry again\u201d on the film page.",
+        )
+    try:
+        plan = hdr10_copy.plan_hdr10(details)
+    except hdr10_copy.Hdr10Refused as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    new_name = hdr10_copy.output_name(file.name)
+    new_path = Path(file.path).with_name(new_name)
+    exists = new_path.exists()
+    if exists and not is_tailarr_copy(new_name):
+        raise HTTPException(
+            status_code=409,
+            detail=f"A file called \u201c{new_name}\u201d is already there and it isn't a copy "
+            "made by Tailarr, so Tailarr won't replace it.",
+        )
+    work = hdr10_copy.usable_work_folder(config.work_dir)
+    needs = hdr10_copy.space_needs(size, new_path.parent, work)
+    preview = Hdr10CopyPreviewOut(
+        film_id=film_id,
+        file=file.name,
+        new_file=new_name,
+        exists=exists,
+        dv_profile=plan.profile,
+        blu_ray_layers=details.hdr.dv_dual_layer,
+        result=plan.expected_formats,
+        kept=[
+            remove_tracks.describe_track(t, details)
+            for t in plan.kept_others
+            if t not in plan.dropped
+        ],
+        chapters=details.chapters,
+        attachments=len(details.attachments),
+        uses_work_folder=work is not None,
+        space=[
+            SpaceNeedOut(label=n.label, needed=n.needed, free=n.free, enough=n.enough)
+            for n in needs
+        ],
+        enough_space=all(n.enough for n in needs),
+    )
+    return preview, file
+
+
+@router.post("/{film_id}/hdr10-copy/preview", response_model=Hdr10CopyPreviewOut)
+def preview_hdr10_copy(
+    film_id: int,
+    body: Hdr10CopyIn,
+    config: Annotated[AppConfig, Depends(get_config)],
+    session: Annotated[Session, Depends(get_session)],
+    reader: Annotated[MediaReader, Depends(get_reader)],
+) -> Hdr10CopyPreviewOut:
+    """The summary to confirm before making a copy without Dolby Vision. Changes nothing."""
+    return _hdr10_preview(session, config, reader, film_id, body.file)[0]
+
+
+@router.post("/{film_id}/hdr10-copy", response_model=JobOut, status_code=202)
+def start_hdr10_copy(
+    film_id: int,
+    body: Hdr10CopyConfirmIn,
+    config: Annotated[AppConfig, Depends(get_config)],
+    session: Annotated[Session, Depends(get_session)],
+    reader: Annotated[MediaReader, Depends(get_reader)],
+    queue: Annotated[JobQueue, Depends(get_queue)],
+) -> JobOut:
+    if not body.confirmed:
+        raise HTTPException(status_code=400, detail="Please confirm the summary first.")
+    preview, file = _hdr10_preview(session, config, reader, film_id, body.file)
+    if preview.exists and not body.overwrite:
+        raise HTTPException(
+            status_code=409,
+            detail=f"A copy called \u201c{preview.new_file}\u201d already exists. Tick "
+            "\u201cReplace the existing copy\u201d to replace it.",
+        )
+    if not preview.enough_space:
+        raise HTTPException(
+            status_code=507,
+            detail="Not enough free space for the HDR10 copy. Free up some space and try again.",
+        )
+    film = _get_film(session, config, film_id)
+    job = queue.submit(
+        hdr10_copy.KIND,
+        title=hdr10_copy.TITLE,
+        subject=_subject(film),
+        path=file.path,
+        film_id=film_id,
+        params={"overwrite": body.overwrite},
     )
     return job_out(job)

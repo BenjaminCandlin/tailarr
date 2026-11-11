@@ -382,7 +382,14 @@ def _media_out(file: FilmFile, record: MediaRecord, details: MediaDetails | None
     out.chapters = details.chapters
     out.attachments = [AttachmentOut(**vars(a)) for a in details.attachments]
     out.tracks = [
-        TrackOut(**{**vars(t), "hdr": _hdr_out(t.hdr) if t.hdr else None})  # type: ignore[arg-type]
+        TrackOut(
+            **{
+                k: v
+                for k, v in vars(t).items()
+                if k not in ("default_duration", "display_dimensions", "hdr")
+            },
+            hdr=_hdr_out(t.hdr) if t.hdr else None,
+        )
         for t in details.tracks
     ]
     return out

@@ -87,7 +87,8 @@ def health(
         check_folder(
             "work",
             "Work folder (optional)",
-            "Extra space for temporary files. Not needed: Tailarr uses the film's folder.",
+            "Working space for making copies without Dolby Vision. Not needed: without it "
+            "Tailarr uses the film's folder.",
             config.work_dir,
             False,
         ),

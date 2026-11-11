@@ -429,7 +429,7 @@ CLAUDE.md, empty PROGRESS.md and DECISIONS.md.
 ### Running things (for developers)
 
 ```bash
-# Backend tests (needs mkvtoolnix, mediainfo, ffmpeg; dovi_tool optional locally)
+# Backend tests (needs mkvtoolnix, mediainfo, ffmpeg and dovi_tool)
 cd backend && uv sync && uv run pytest
 # Frontend: lint, unit tests, build
 cd frontend && npm ci && npm run lint && npm test && npm run build
@@ -445,9 +445,9 @@ docker/smoke-test.sh tailarr
   instead of skipping them.
 - Dolby Vision / HDR10+ samples are made by inserting metadata into tiny
   x265 encodes (`tests/samples/make_samples.py`), using real dovi_tool RPU
-  test files from `tests/samples/fixtures/`. The profile 7 sample is a single
-  video track carrying profile 7 metadata; a true dual-layer (BL+EL) sample
-  is added in Stage 6, where it's needed.
+  test files from `tests/samples/fixtures/`. There is also a true dual-layer
+  profile 7 sample (BL+EL+RPU in one track, woven together with `dovi_tool mux`),
+  so `dovi_tool` is needed to build the samples.
 - Keep `DOVI_TOOL_VERSION` the same in `Dockerfile` and
   `.github/workflows/ci.yml`.
 
