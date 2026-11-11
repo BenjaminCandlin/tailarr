@@ -75,7 +75,9 @@ _TECH = re.compile(
 
 def _title_after(rest: str) -> str:
     """' - The Second One [WEBDL-1080p]' -> 'The Second One'."""
-    rest = re.sub(r"\[[^\]]*\]|\{[^}]*\}", "", rest)
+    # Sonarr puts quality and release group after the title: "Title [WEBDL-1080p]-GRP".
+    rest = rest.split("[", 1)[0]
+    rest = re.sub(r"\{[^}]*\}", "", rest)
     rest = rest.strip(" -._")
     if " " not in rest and "." in rest:
         rest = rest.replace(".", " ")
