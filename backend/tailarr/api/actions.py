@@ -13,7 +13,6 @@ Each has a ``/preview`` that changes nothing (for the summary shown first), and
 the action itself only queues a job after the owner confirmed.
 """
 
-
 import os
 from pathlib import Path
 from typing import Annotated
