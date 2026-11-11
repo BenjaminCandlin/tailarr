@@ -26,6 +26,8 @@ from ..connections.settings import (
 from ..core.config import AppConfig
 from ..core.paths import is_inside, map_remote_path
 from ..core.settings_store import get_library_settings
+from ..jobs.models import Job
+from ..rules.models import Rule
 from .common import time_of
 from .deps import get_config, get_session
 
@@ -292,6 +294,12 @@ class ActivityOut(BaseModel):
     path: str | None
     job_id: int | None
     rule_id: int | None
+    # Filled in from the job and rule, when there are any.
+    job_status: str | None = None
+    job_error: str | None = None
+    film_id: int | None = None
+    episode_id: int | None = None
+    rule_name: str | None = None
 
 
 @router.get("/api/activity", response_model=list[ActivityOut])
@@ -300,11 +308,14 @@ def activity(
     limit: int = 100,
     source: str | None = None,
     rule_id: int | None = None,
+    problems: bool = False,
 ) -> list[ActivityOut]:
     """The newest things Tailarr did by itself or was told, newest first."""
     query = select(ActivityEntry)
     if source:
         query = query.where(ActivityEntry.source == source)
+    if problems:
+        query = query.where(ActivityEntry.ok == False)  # noqa: E712
     if rule_id is not None:
         query = query.where(ActivityEntry.rule_id == rule_id)
     rows = session.exec(
@@ -312,7 +323,24 @@ def activity(
             max(1, min(limit, 500))
         )
     ).all()
-    return [
-        ActivityOut(**{**r.model_dump(), "at": time_of(r.at)})  # type: ignore[arg-type]
-        for r in rows
-    ]
+    job_ids = [r.job_id for r in rows if r.job_id]
+    jobs = (
+        {j.id: j for j in session.exec(select(Job).where(col(Job.id).in_(job_ids))).all()}
+        if job_ids
+        else {}
+    )
+    rule_names = {r.id: r.name for r in session.exec(select(Rule)).all()}
+    out = []
+    for row in rows:
+        job = jobs.get(row.job_id) if row.job_id else None
+        out.append(
+            ActivityOut(
+                **{**row.model_dump(), "at": time_of(row.at)},  # type: ignore[arg-type]
+                job_status=job.status if job else None,
+                job_error=job.error if job else None,
+                film_id=job.film_id if job else None,
+                episode_id=job.episode_id if job else None,
+                rule_name=rule_names.get(row.rule_id) if row.rule_id else None,
+            )
+        )
+    return out
