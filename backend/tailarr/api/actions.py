@@ -21,6 +21,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlmodel import Session
 
+from ..connections.settings import get_connections
 from ..core.config import AppConfig
 from ..core.disk import SAFETY_MARGIN, free_space
 from ..core.paths import is_inside
@@ -157,6 +158,9 @@ class ReplaceOriginalPreviewOut(BaseModel):
     recycle_folder: str
     # An HDR10 copy: replacing the original removes Dolby Vision from the film for good.
     loses_dolby_vision: bool
+    # ...and Radarr/Sonarr is connected: if its quality settings prefer Dolby Vision it may
+    # download a Dolby Vision release again as an "upgrade". Says which app.
+    may_redownload: str | None = None
 
 
 class Hdr10CopyIn(BaseModel):
@@ -416,6 +420,10 @@ def make_router(prefix: str, load_item: ItemLoader) -> APIRouter:
             recycle_folder=str(Path(original.path).parent / RECYCLE_FOLDER),
             loses_dolby_vision=record.kind == replace_original.LOSES_DOLBY_VISION_KIND,
         )
+        if preview.loses_dolby_vision:
+            app = "radarr" if item.kind == "film" else "sonarr"
+            if getattr(get_connections(session), app).configured:
+                preview.may_redownload = "Radarr" if app == "radarr" else "Sonarr"
         return preview, original, copy
 
     @router.post("/{item_id}/replace-original/preview", response_model=ReplaceOriginalPreviewOut)

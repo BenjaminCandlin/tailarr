@@ -42,6 +42,11 @@ def update_library(
     if saved.movies_dir != before.movies_dir:
         # A different Films folder: look for the films in it straight away.
         request.app.state.film_scanner.start()
+    if saved.tv_dir != before.tv_dir:
+        request.app.state.tv_scanner.start()
+    if saved.path_mappings != before.path_mappings:
+        # Radarr/Sonarr paths may now match different folders.
+        request.app.state.connections.start_sync()
     return saved
 
 

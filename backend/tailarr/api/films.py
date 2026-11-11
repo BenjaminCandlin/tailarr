@@ -14,12 +14,15 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
+from ..connections.models import ExternalInfo
+from ..connections.service import external_info
 from ..core.config import AppConfig
 from ..core.paths import is_inside
 from ..core.settings_store import get_library_settings
 from ..library.artwork import thumbnail
 from ..library.media_reader import MediaReader
 from ..library.models import Film, FilmFile
+from ..library.naming import sort_key
 from ..library.scanner import FilmScanner
 from .common import (
     NOT_READ,
@@ -38,6 +41,7 @@ from .common import (
     time_of,
 )
 from .deps import get_config, get_session
+from .external import arr_artwork, artwork_version
 
 router = APIRouter(prefix="/api/films")
 
@@ -78,14 +82,18 @@ class FilmDetailOut(FilmOut):
     files: list[FileOut]
 
 
-def _film_out(film: Film, media: MediaSummaryOut = NOT_READ) -> dict:
+def _film_out(
+    film: Film, media: MediaSummaryOut = NOT_READ, info: ExternalInfo | None = None
+) -> dict:
     poster = None
     if film.poster_path:
         poster = f"/api/films/{film.id}/poster?v={int(film.poster_mtime or 0)}"
+    elif info is not None and info.poster_file:
+        poster = f"/api/films/{film.id}/poster?v={artwork_version(info.poster_file)}"
     return {
         "id": film.id,
-        "title": film.title,
-        "year": film.year,
+        "title": info.title if info and info.title else film.title,
+        "year": info.year if info and info.year else film.year,
         "folder_name": film.folder_name,
         "poster_url": poster,
         "size": film.size,
@@ -116,13 +124,16 @@ def list_films(
         for f in session.exec(select(FilmFile)).all()  # one query, not one per film
     }
     records = records_for(session)
+    infos = external_info(session)
     films = []
     for film in session.exec(select(Film).order_by(Film.sort_title, Film.year)).all():
         if not is_inside(film.folder, root):
             continue
         main = main_files.get((film.id, film.main_file or ""))
         media = summary_of(records.get(main.path), main.size, main.mtime) if main else NOT_READ
-        films.append(FilmOut(**_film_out(film, media)))
+        films.append(FilmOut(**_film_out(film, media, infos.get(film.folder))))
+    # Radarr's titles may sort differently from the folder names.
+    films.sort(key=lambda f: (sort_key(f.title), f.year or 0))
     return FilmListOut(root=root, films=films, scan=scan_out(scanner), reading=reading_out(reader))
 
 
@@ -149,8 +160,10 @@ def _files(session: Session, film: Film) -> list[FilmFile]:
     return sorted(files, key=lambda f: (f.name != film.main_file, f.is_copy, f.name))
 
 
-def subject_of(film: Film) -> str:
-    return f"{film.title} ({film.year})" if film.year else film.title
+def subject_of(film: Film, info: ExternalInfo | None = None) -> str:
+    title = info.title if info and info.title else film.title
+    year = info.year if info and info.year else film.year
+    return f"{title} ({year})" if year else title
 
 
 def load_film(session: Session, config: AppConfig, film_id: int) -> Item:
@@ -159,7 +172,7 @@ def load_film(session: Session, config: AppConfig, film_id: int) -> Item:
     return Item(
         kind="film",
         id=film_id,
-        subject=subject_of(film),
+        subject=subject_of(film, session.get(ExternalInfo, film.folder)),
         folder=film.folder,
         root=_films_root(session, config),
         main_file=film.main_file,
@@ -175,13 +188,16 @@ def film_detail(
 ) -> FilmDetailOut:
     film = _get_film(session, config, film_id)
     files = _files(session, film)
+    info = session.get(ExternalInfo, film.folder)
     backdrop = None
     if film.backdrop_path:
         backdrop = f"/api/films/{film.id}/backdrop?v={int(film.backdrop_mtime or 0)}"
+    elif info is not None and info.backdrop_file:
+        backdrop = f"/api/films/{film.id}/backdrop?v={artwork_version(info.backdrop_file)}"
     out_files = files_out(session, list(files), film.main_file)
     main = next((f for f in out_files if f.is_main), None)
     return FilmDetailOut(
-        **_film_out(film, main.media if main else NOT_READ),
+        **_film_out(film, main.media if main else NOT_READ, info),
         folder=film.folder,
         backdrop_url=backdrop,
         tmdb_id=film.tmdb_id,
@@ -197,9 +213,13 @@ def _artwork(
     stored = film.poster_path if kind == "poster" else film.backdrop_path
     root = _films_root(session, config)
     # Check again at the moment of reading: only pictures inside the Films folder are served.
-    if not stored or not is_inside(stored, root) or not Path(stored).is_file():
+    if stored and is_inside(stored, root) and Path(stored).is_file():
+        return Path(stored)
+    # Otherwise Radarr's picture, if Tailarr saved one (only from its own cache folder).
+    cached = arr_artwork(session.get(ExternalInfo, film.folder), kind, config)
+    if cached is None:
         raise HTTPException(status_code=404, detail="No picture for this film.")
-    return Path(stored)
+    return cached
 
 
 @router.get("/{film_id}/poster", response_model=None)

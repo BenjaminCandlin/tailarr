@@ -154,9 +154,16 @@ class JobType:
 
 
 class JobQueue:
-    def __init__(self, engine: Engine, job_types: list[JobType]) -> None:
+    def __init__(
+        self,
+        engine: Engine,
+        job_types: list[JobType],
+        on_done: list[Callable[[Job, JobType], None]] | None = None,
+    ) -> None:
         self._engine = engine
         self._types = {t.kind: t for t in job_types}
+        # Called after each job that finished successfully (e.g. ask Plex to refresh).
+        self.on_done: list[Callable[[Job, JobType], None]] = list(on_done or [])
         self._lock = threading.Lock()
         self._wake = threading.Event()
         self._stop = threading.Event()
@@ -392,6 +399,14 @@ class JobQueue:
             fresh.cancellable = False
             session.add(fresh)
             session.commit()
+            session.refresh(fresh)
+            session.expunge(fresh)
+        if fresh.status == JobStatus.DONE and job_type is not None:
+            for hook in self.on_done:
+                try:
+                    hook(fresh, job_type)
+                except Exception:  # a hook must never stop the queue
+                    log.exception("After-job step failed for job %s", job.id)
 
     # -- used by JobContext --------------------------------------------------------
     def _update(self, job_id: int, **values: Any) -> None:
