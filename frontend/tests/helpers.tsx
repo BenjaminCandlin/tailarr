@@ -146,6 +146,8 @@ export const FILM_DETAIL: FilmDetail = {
       is_main: true,
       hardlinked: true,
       media: DV81,
+      copy_of: null,
+      can_replace_original: false,
     },
     {
       name: "Colour Test (2023) WEBDL-2160p DV HDR10 - HDR10.mkv",
@@ -156,6 +158,8 @@ export const FILM_DETAIL: FilmDetail = {
       is_main: false,
       hardlinked: false,
       media: summary({ hdr: ["HDR10"], resolution: "4K" }),
+      copy_of: null,
+      can_replace_original: false,
     },
   ],
 };
@@ -277,6 +281,8 @@ export function mockBackend(handler?: Handler) {
     if (custom) return custom;
     if (url.endsWith("/api/health")) return json(HEALTH);
     if (url.endsWith("/api/settings/library")) return json(LIBRARY);
+    if (url.endsWith("/api/settings/recycle"))
+      return json({ keep_days: 30, file_count: 0, total_size: 0 });
     if (url.endsWith("/api/jobs/counts")) return json({ running: 0, queued: 0 });
     if (url.endsWith("/api/jobs")) return json({ jobs: [], counts: { running: 0, queued: 0 } });
     if (url.endsWith("/api/films")) return json(FILMS);
@@ -323,6 +329,7 @@ export function job(extra: Partial<Job> = {}): Job {
     message: null,
     error: null,
     error_details: null,
+    result: null,
     ...extra,
   };
 }

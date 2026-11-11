@@ -18,6 +18,7 @@ from ..core.disk import free_space
 from ..core.paths import is_inside
 from ..core.settings_store import get_library_settings
 from ..jobs.engine import JobQueue
+from ..jobs.models import CopyRecord
 from ..jobs.track_settings import HARDLINK_REFUSAL, TrackChange, TracksChangedError
 from ..jobs.track_settings import KIND as TRACK_SETTINGS
 from ..jobs.track_settings import TITLE as TRACK_SETTINGS_TITLE
@@ -101,6 +102,10 @@ class FilmFileOut(BaseModel):
     is_main: bool
     hardlinked: bool
     media: MediaSummaryOut
+    # For copies Tailarr made: the file it was made from, and whether that original can
+    # be replaced with this copy (the original is still there, unchanged since).
+    copy_of: str | None = None
+    can_replace_original: bool = False
 
 
 class FilmDetailOut(FilmOut):
@@ -244,6 +249,23 @@ def film_detail(
         backdrop = f"/api/films/{film.id}/backdrop?v={int(film.backdrop_mtime or 0)}"
     main = next((f for f in files if f.name == film.main_file), None)
     main_media = _summary(records.get(main.path), main.size, main.mtime) if main else _NOT_READ
+    copies = {
+        c.path: c
+        for c in session.exec(
+            select(CopyRecord).where(col(CopyRecord.path).in_([f.path for f in files]))
+        ).all()
+    }
+    by_path = {f.path: f for f in files}
+
+    def replaceable(record: CopyRecord | None) -> bool:
+        source = by_path.get(record.source_path) if record else None
+        return (
+            record is not None
+            and source is not None
+            and source.size == record.source_size
+            and abs(source.mtime - record.source_mtime) < 1e-3
+        )
+
     return FilmDetailOut(
         **_film_out(film, main_media),
         folder=film.folder,
@@ -260,6 +282,8 @@ def film_detail(
                 is_main=f.name == film.main_file,
                 hardlinked=f.links > 1,
                 media=_summary(records.get(f.path), f.size, f.mtime),
+                copy_of=Path(copies[f.path].source_path).name if f.path in copies else None,
+                can_replace_original=replaceable(copies.get(f.path)),
             )
             for f in files
         ],

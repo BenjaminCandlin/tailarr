@@ -72,6 +72,8 @@ class JobContext:
         self.path = job.path
         self.film_id = job.film_id
         self.params: dict[str, Any] = json.loads(job.params)
+        # Facts for the web page once the job is done (e.g. the new copy's file name).
+        self.result: dict[str, Any] | None = None
         self.cancel_event = threading.Event()
         self._last_progress_write = 0.0
         self._temp_count = 0
@@ -142,6 +144,8 @@ class JobType:
     run: JobHandler
     # True for jobs that edit the original file itself: an interruption is explained differently.
     in_place: bool = False
+    # What to say if Tailarr stopped during one of its "can't be cancelled" steps.
+    interrupted_message: str | None = None
 
 
 class JobQueue:
@@ -257,7 +261,10 @@ class JobQueue:
                 # An in-place job stopped during its "don't interrupt" step may have
                 # changed the file; say so honestly.
                 mid_edit = job_type is not None and job_type.in_place and not job.cancellable
-                job.error = INTERRUPTED_IN_PLACE_MESSAGE if mid_edit else INTERRUPTED_MESSAGE
+                job.error = INTERRUPTED_MESSAGE
+                if mid_edit:
+                    assert job_type is not None
+                    job.error = job_type.interrupted_message or INTERRUPTED_IN_PLACE_MESSAGE
                 job.status = JobStatus.INTERRUPTED
                 job.finished_at = _now()
                 job.cancellable = False
@@ -312,6 +319,8 @@ class JobQueue:
                 )
             message = job_type.run(context)
             outcome = {"status": JobStatus.DONE, "message": message, "progress": 100.0}
+            if context.result is not None:
+                outcome["result"] = json.dumps(context.result)
         except JobCancelled:
             outcome = {
                 "status": JobStatus.CANCELLED,

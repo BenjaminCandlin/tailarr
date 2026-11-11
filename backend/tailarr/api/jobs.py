@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 from typing import Annotated
 
@@ -43,6 +44,7 @@ class JobOut(BaseModel):
     message: str | None
     error: str | None
     error_details: str | None
+    result: dict | None  # facts for the web page, e.g. {"copy": "Film - Tailarr.mkv"}
 
 
 class JobCountsOut(BaseModel):
@@ -82,6 +84,7 @@ def job_out(job: Job) -> JobOut:
         message=job.message,
         error=job.error,
         error_details=job.error_details,
+        result=json.loads(job.result) if job.result else None,
     )
 
 

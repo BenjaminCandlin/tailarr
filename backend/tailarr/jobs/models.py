@@ -8,7 +8,7 @@ from sqlmodel import Field, SQLModel
 
 # Bump when Job columns change. Old job history is then cleared (it's only history:
 # nothing on disk depends on it, and no job can be running while Tailarr starts).
-JOB_TABLE_VERSION = 1
+JOB_TABLE_VERSION = 2  # 2: added `result`
 
 
 class JobStatus(StrEnum):
@@ -46,3 +46,32 @@ class Job(SQLModel, table=True):
     error_details: str | None = None  # the tools' own words, for "Show technical details"
     params: str = "{}"  # JSON: what the job type needs
     temp_paths: str = "[]"  # JSON: temporary files to remove if the job doesn't finish
+    result: str | None = None  # JSON: facts for the web page, e.g. the new copy's file name
+
+
+class CopyRecord(SQLModel, table=True):
+    """A copy Tailarr made, and the file it was made from.
+
+    Used to check, before "Replace the original", that the original hasn't changed since
+    the copy was made (e.g. Radarr upgraded it). Stage 8 builds on this to tidy up copies
+    after upgrades and renames. Never cleared automatically: it's not a cache.
+    """
+
+    path: str = Field(primary_key=True)  # the copy
+    source_path: str = Field(index=True)
+    source_size: int
+    source_mtime: float
+    kind: str  # the job type that made it, e.g. "remove_tracks"
+    created_at: float
+    job_id: int | None = None
+
+
+class RecycledFile(SQLModel, table=True):
+    """An original file moved to a recycle folder, to be deleted after the keep period."""
+
+    id: int | None = Field(default=None, primary_key=True)
+    path: str  # where it is now, inside a ".tailarr-recycle" folder
+    original_path: str  # where it was
+    size: int
+    recycled_at: float
+    job_id: int | None = None

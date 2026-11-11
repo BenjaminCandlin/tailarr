@@ -153,7 +153,7 @@ def check_file(path: str, roots: list[str]) -> os.stat_result:
             str(exc),
         ) from exc
     if Path(path).suffix.lower() != ".mkv":
-        raise JobFailed("Tailarr can only change track settings in MKV files.")
+        raise JobFailed("Tailarr can only work with MKV files.")
     try:
         return os.stat(path)
     except FileNotFoundError as exc:

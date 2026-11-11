@@ -143,49 +143,52 @@ def find_films(root: Path) -> list[FoundFilm]:
     return films
 
 
+def _save_film(session: Session, item: FoundFilm, film: Film | None) -> Film:
+    parsed = parse_film_folder(item.folder_name)
+    main = item.main_file
+    year = parsed.year
+    if year is None:
+        # e.g. folder "1917" holding "1917 (2019) Bluray-2160p.mkv"
+        year = parse_film_folder(Path(main.name).stem).year
+    film = film or Film(folder=item.folder, folder_name="", title="", sort_title="")
+    film.folder_name = item.folder_name
+    film.title = parsed.title
+    film.sort_title = sort_key(parsed.title)
+    film.year = year
+    film.tmdb_id = parsed.tmdb_id
+    film.imdb_id = parsed.imdb_id
+    film.poster_path, film.poster_mtime = item.poster or (None, None)
+    film.backdrop_path, film.backdrop_mtime = item.backdrop or (None, None)
+    film.main_file = main.name
+    film.size = sum(f.size for f in item.files)
+    film.added_at = main.mtime
+    film.file_count = len(item.files)
+    session.add(film)
+    session.flush()
+    session.exec(delete(FilmFile).where(FilmFile.film_id == film.id))  # type: ignore[arg-type]
+    for f in item.files:
+        session.add(
+            FilmFile(
+                film_id=film.id,  # type: ignore[arg-type]
+                name=f.name,
+                path=f.path,
+                size=f.size,
+                mtime=f.mtime,
+                is_mkv=f.is_mkv,
+                is_copy=f.is_copy,
+                links=f.links,
+            )
+        )
+    return film
+
+
 def save_films(session: Session, found: list[FoundFilm]) -> int:
     """Bring the database in line with what's on disk. Returns the number of films."""
     existing = {film.folder: film for film in session.exec(select(Film)).all()}
     seen: set[str] = set()
     for item in found:
         seen.add(item.folder)
-        parsed = parse_film_folder(item.folder_name)
-        main = item.main_file
-        year = parsed.year
-        if year is None:
-            # e.g. folder "1917" holding "1917 (2019) Bluray-2160p.mkv"
-            year = parse_film_folder(Path(main.name).stem).year
-        film = existing.get(item.folder) or Film(
-            folder=item.folder, folder_name="", title="", sort_title=""
-        )
-        film.folder_name = item.folder_name
-        film.title = parsed.title
-        film.sort_title = sort_key(parsed.title)
-        film.year = year
-        film.tmdb_id = parsed.tmdb_id
-        film.imdb_id = parsed.imdb_id
-        film.poster_path, film.poster_mtime = item.poster or (None, None)
-        film.backdrop_path, film.backdrop_mtime = item.backdrop or (None, None)
-        film.main_file = main.name
-        film.size = sum(f.size for f in item.files)
-        film.added_at = main.mtime
-        film.file_count = len(item.files)
-        session.add(film)
-        session.flush()
-        session.exec(delete(FilmFile).where(FilmFile.film_id == film.id))  # type: ignore[arg-type]
-        for f in item.files:
-            session.add(
-                FilmFile(
-                    film_id=film.id,  # type: ignore[arg-type]
-                    name=f.name,
-                    path=f.path,
-                    size=f.size,
-                    mtime=f.mtime,
-                    is_mkv=f.is_mkv,
-                    is_copy=f.is_copy,
-                    links=f.links,
-                )
-            )
+        _save_film(session, item, existing.get(item.folder))
     # Films that are gone, or that belong to a previous Films folder setting.
     for folder, film in existing.items():
         if folder not in seen:
@@ -193,6 +196,25 @@ def save_films(session: Session, found: list[FoundFilm]) -> int:
             session.delete(film)
     session.commit()
     return len(found)
+
+
+def rescan_film_folder(session: Session, folder: str, root: Path) -> Film | None:
+    """Update one film after Tailarr added, replaced or removed a file in its folder.
+
+    Much quicker than a full scan. Returns None if the folder no longer holds a film.
+    """
+    existing = session.exec(select(Film).where(Film.folder == folder)).first()
+    found = _scan_folder(Path(folder), root) if is_inside(folder, root) else None
+    if found is None:
+        if existing is not None:
+            session.exec(delete(FilmFile).where(FilmFile.film_id == existing.id))  # type: ignore[arg-type]
+            session.delete(existing)
+            session.commit()
+        return None
+    film = _save_film(session, found, existing)
+    session.commit()
+    session.refresh(film)
+    return film
 
 
 @dataclass
