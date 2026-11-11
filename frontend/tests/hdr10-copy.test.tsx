@@ -9,7 +9,6 @@ import { MEDIA, job, json, mockBackend, renderApp } from "./helpers";
 const COPY = "Colour Test (2023) WEBDL-2160p DV HDR10 - HDR10.mkv";
 
 const PREVIEW: Hdr10CopyPreview = {
-  film_id: 5,
   file: MEDIA.file,
   new_file: COPY,
   exists: false,

@@ -315,6 +315,7 @@ export function job(extra: Partial<Job> = {}): Job {
     subject: "Colour Test (2023)",
     file_name: MEDIA.file,
     film_id: 5,
+    episode_id: null,
     group_id: null,
     status: "queued",
     step: "",

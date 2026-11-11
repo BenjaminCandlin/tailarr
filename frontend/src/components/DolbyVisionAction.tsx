@@ -6,7 +6,8 @@ import { ConfirmSummary } from "@/components/ConfirmSummary";
 import { JobFollow } from "@/components/JobFollow";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { api, type Hdr, type Hdr10CopyPreview, type Job } from "@/lib/api";
+import { api, type ItemRef, type Hdr, type Hdr10CopyPreview, type Job } from "@/lib/api";
+import { refreshLibrary } from "@/lib/jobs";
 import { formatSize, plural } from "@/lib/format";
 
 function Summary({
@@ -104,12 +105,12 @@ function Summary({
  * for profile 5, which has no HDR10 picture underneath.
  */
 export function DolbyVisionAction({
-  filmId,
+  item,
   file,
   hdr,
   onOpenFile,
 }: {
-  filmId: number;
+  item: ItemRef;
   file: string;
   hdr: Hdr;
   onOpenFile?: (name: string) => void;
@@ -121,14 +122,14 @@ export function DolbyVisionAction({
   const [running, setRunning] = useState(false);
 
   const check = useMutation({
-    mutationFn: () => api.previewHdr10Copy(filmId, file),
+    mutationFn: () => api.previewHdr10Copy(item, file),
     onSuccess: (data) => {
       setOverwrite(false);
       setPreview(data);
     },
   });
   const start = useMutation({
-    mutationFn: () => api.hdr10Copy(filmId, file, overwrite),
+    mutationFn: () => api.hdr10Copy(item, file, overwrite),
     onSuccess: (job) => {
       setPreview(null);
       setJobId(job.id);
@@ -139,7 +140,7 @@ export function DolbyVisionAction({
 
   const onFinished = (job: Job) => {
     setRunning(false);
-    if (job.status === "done") void queryClient.invalidateQueries({ queryKey: ["films"] });
+    if (job.status === "done") refreshLibrary(queryClient);
     void queryClient.invalidateQueries({ queryKey: ["jobs"] });
   };
 

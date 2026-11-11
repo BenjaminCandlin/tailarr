@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogBody, DialogContent, DialogFooter } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { api, type Job, type ReplaceOriginalPreview } from "@/lib/api";
+import { api, type ItemRef, type Job, type ReplaceOriginalPreview } from "@/lib/api";
+import { refreshLibrary } from "@/lib/jobs";
 import { formatSize } from "@/lib/format";
 
 /** What happens to disk space, in plain words. */
@@ -124,13 +125,13 @@ function Summary({
  * progress inside the same dialog.
  */
 export function ReplaceOriginalDialog({
-  filmId,
+  item,
   copyFile,
   open,
   onOpenChange,
   onReplaced,
 }: {
-  filmId: number;
+  item: ItemRef;
   copyFile: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -141,14 +142,14 @@ export function ReplaceOriginalDialog({
   const [jobId, setJobId] = useState<number | null>(null);
   const [finished, setFinished] = useState<Job | null>(null);
   const preview = useQuery({
-    queryKey: ["films", String(filmId), "replace-preview", copyFile],
-    queryFn: () => api.previewReplaceOriginal(filmId, copyFile),
+    queryKey: [item.kind, String(item.id), "replace-preview", copyFile],
+    queryFn: () => api.previewReplaceOriginal(item, copyFile),
     enabled: open && jobId === null,
     retry: false,
     gcTime: 0,
   });
   const replace = useMutation({
-    mutationFn: () => api.replaceOriginal(filmId, copyFile),
+    mutationFn: () => api.replaceOriginal(item, copyFile),
     onSuccess: (job) => {
       setJobId(job.id);
       void queryClient.invalidateQueries({ queryKey: ["jobs"] });
@@ -159,7 +160,7 @@ export function ReplaceOriginalDialog({
     if (!next) {
       // Refresh the film only now: the copy's row (and this dialog) may then disappear.
       if (finished) {
-        void queryClient.invalidateQueries({ queryKey: ["films"] });
+        refreshLibrary(queryClient);
         if (finished.status === "done") onReplaced?.(finished);
       }
       setUnderstood(false);

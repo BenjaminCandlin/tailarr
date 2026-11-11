@@ -8,7 +8,6 @@ import type { TrackSettingsPreview } from "@/lib/api";
 import { FILM_DETAIL, MEDIA, job, json, mockBackend, renderApp, track } from "./helpers";
 
 const PREVIEW: TrackSettingsPreview = {
-  film_id: 5,
   file: MEDIA.file,
   path: `/data/media/movies/Colour Test (2023)/${MEDIA.file}`,
   tracks: [

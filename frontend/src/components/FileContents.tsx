@@ -6,7 +6,7 @@ import { TrackSettingsEditor } from "@/components/TrackSettingsEditor";
 import { TrackTable } from "@/components/TrackTable";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { Media } from "@/lib/api";
+import type { ItemRef, Media } from "@/lib/api";
 import { formatDuration, plural } from "@/lib/format";
 import { explainHdr } from "@/lib/hdr";
 import { cn } from "@/lib/utils";
@@ -121,7 +121,7 @@ export function FileContents({
   queryKey: unknown[];
   load: (refresh: boolean) => Promise<Media>;
   /** Allow changing track settings (MKV files only). */
-  edit?: { filmId: number; file: string; onOpenFile?: (name: string) => void };
+  edit?: { item: ItemRef; file: string; onOpenFile?: (name: string) => void };
 }) {
   const queryClient = useQueryClient();
   const media = useQuery({ queryKey, queryFn: () => load(false), retry: false });
@@ -175,7 +175,7 @@ export function FileContents({
       <HdrNote media={data} />
       {edit && data.hdr?.formats.includes("Dolby Vision") && (
         <DolbyVisionAction
-          filmId={edit.filmId}
+          item={edit.item}
           file={edit.file}
           hdr={data.hdr}
           onOpenFile={edit.onOpenFile}
@@ -183,7 +183,7 @@ export function FileContents({
       )}
       {edit ? (
         <TrackSettingsEditor
-          filmId={edit.filmId}
+          item={edit.item}
           file={edit.file}
           tracks={data.tracks}
           onOpenFile={edit.onOpenFile}

@@ -169,6 +169,7 @@ export type Job = {
   subject: string;
   file_name: string;
   film_id: number | null;
+  episode_id: number | null;
   group_id: string | null;
   status: JobStatus;
   step: string;
@@ -190,7 +191,9 @@ export type Job = {
 
 export type JobCounts = { running: number; queued: number };
 
-export type JobList = { jobs: Job[]; counts: JobCounts };
+export type JobGroup = { id: string; title: string; created_at: string };
+
+export type JobList = { jobs: Job[]; counts: JobCounts; groups: JobGroup[] };
 
 /** The settings wanted for one track; fields left out stay as they are. */
 export type TrackChange = {
@@ -204,7 +207,6 @@ export type TrackChange = {
 export type TrackSettingsRequest = { file: string; changes: TrackChange[] };
 
 export type TrackSettingsPreview = {
-  film_id: number;
   file: string;
   path: string;
   tracks: { uid: string; label: string; changes: string[] }[];
@@ -221,7 +223,6 @@ export type RemoveTracksRequest = {
 };
 
 export type RemoveTracksPreview = {
-  film_id: number;
   file: string;
   new_file: string;
   /** A Tailarr copy with the new name is already there. */
@@ -238,7 +239,6 @@ export type RemoveTracksPreview = {
 };
 
 export type ReplaceOriginalPreview = {
-  film_id: number;
   original: string;
   original_size: number;
   copy_file: string;
@@ -251,7 +251,6 @@ export type ReplaceOriginalPreview = {
 };
 
 export type Hdr10CopyPreview = {
-  film_id: number;
   file: string;
   new_file: string;
   /** A Tailarr copy with the new name is already there. */
@@ -268,6 +267,125 @@ export type Hdr10CopyPreview = {
   space: { label: string; needed: number; free: number; enough: boolean }[];
   enough_space: boolean;
 };
+
+/** A film or an episode: every action on files works the same way for both. */
+export type ItemRef = { kind: "films" | "episodes"; id: number };
+
+export function itemPath(item: ItemRef): string {
+  return `/api/${item.kind}/${item.id}`;
+}
+
+export type Show = {
+  id: number;
+  title: string;
+  year: number | null;
+  folder_name: string;
+  poster_url: string | null;
+  size: number;
+  added_at: string;
+  season_count: number;
+  episode_count: number;
+  /** Across the episodes: HDR formats found and the best picture size. */
+  media: MediaSummary;
+  dv_episodes: number;
+};
+
+export type ShowList = { root: string; shows: Show[]; scan: ScanStatus; reading: ReadingStatus };
+
+export type Episode = {
+  id: number;
+  season: number | null;
+  episode: number | null;
+  episode_end: number | null;
+  /** "S01E02", "Special 3", or "" when the file name has no episode number. */
+  label: string;
+  title: string;
+  main_file: string | null;
+  is_mkv: boolean;
+  size: number;
+  added_at: string;
+  file_count: number;
+  has_copy: boolean;
+  media: MediaSummary;
+};
+
+export type Season = { season: number | null; label: string; size: number; episodes: Episode[] };
+
+export type ShowDetail = Show & {
+  folder: string;
+  backdrop_url: string | null;
+  tvdb_id: number | null;
+  seasons: Season[];
+};
+
+export type EpisodeDetail = Episode & {
+  show_id: number;
+  show_title: string;
+  show_year: number | null;
+  poster_url: string | null;
+  backdrop_url: string | null;
+  folder: string;
+  files: FilmFile[];
+};
+
+export type LanguageChoice = {
+  /** "only": keep just these languages; "none": remove them all (subtitles only). */
+  mode: "all" | "only" | "none";
+  languages: string[];
+  keep_unknown?: boolean;
+  keep_original?: boolean;
+};
+
+export type BatchAction =
+  | { type: "hdr10_copy"; overwrite?: boolean }
+  | {
+      type: "remove_tracks";
+      audio: LanguageChoice;
+      subtitles: LanguageChoice;
+      remove_commentary: boolean;
+      overwrite?: boolean;
+    }
+  | {
+      type: "default_tracks";
+      audio_language: string | null;
+      subtitles: "keep" | "off" | "language";
+      subtitle_language: string | null;
+    };
+
+export type BatchRequest = {
+  /** null: the whole show. */
+  season: number | null;
+  action: BatchAction;
+  allow_hardlinked: boolean;
+};
+
+export type BatchFile = {
+  episode_id: number;
+  label: string;
+  file: string;
+  will_run: boolean;
+  lines: string[];
+  reason: string | null;
+  hardlinked: boolean;
+  new_file: string | null;
+};
+
+export type BatchPreview = {
+  title: string;
+  action: string;
+  scope: string;
+  changes_originals: boolean;
+  files: BatchFile[];
+  will_run: number;
+  skipped: number;
+  hardlinked_skipped: number;
+  space: { label: string; needed: number; free: number; enough: boolean }[];
+  enough_space: boolean;
+};
+
+export type BatchStarted = { group_id: string; title: string; jobs: number };
+
+export type Language = { code: string; name: string; common: boolean };
 
 export type RecycleSettings = { keep_days: number; file_count: number; total_size: number };
 
@@ -323,57 +441,74 @@ export const api = {
     }),
   films: () => request<FilmList>("/api/films"),
   film: (id: number | string) => request<FilmDetail>(`/api/films/${id}`),
-  filmMedia: (id: number | string, file: string, refresh = false) =>
+  media: (item: ItemRef, file: string, refresh = false) =>
     request<Media>(
-      `/api/films/${id}/media?${new URLSearchParams({ file, ...(refresh ? { refresh: "true" } : {}) })}`,
+      `${itemPath(item)}/media?${new URLSearchParams({ file, ...(refresh ? { refresh: "true" } : {}) })}`,
     ),
   rescanFilms: () => request<ScanStatus>("/api/films/scan", { method: "POST" }),
-  previewTrackSettings: (id: number | string, body: TrackSettingsRequest) =>
-    request<TrackSettingsPreview>(`/api/films/${id}/track-settings/preview`, {
+  previewTrackSettings: (item: ItemRef, body: TrackSettingsRequest) =>
+    request<TrackSettingsPreview>(`${itemPath(item)}/track-settings/preview`, {
       method: "POST",
       body: JSON.stringify(body),
     }),
   changeTrackSettings: (
-    id: number | string,
+    item: ItemRef,
     body: TrackSettingsRequest & { confirmed: true; allow_hardlinked: boolean },
   ) =>
-    request<Job>(`/api/films/${id}/track-settings`, {
+    request<Job>(`${itemPath(item)}/track-settings`, {
       method: "POST",
       body: JSON.stringify(body),
     }),
-  previewRemoveTracks: (id: number | string, body: RemoveTracksRequest) =>
-    request<RemoveTracksPreview>(`/api/films/${id}/remove-tracks/preview`, {
+  previewRemoveTracks: (item: ItemRef, body: RemoveTracksRequest) =>
+    request<RemoveTracksPreview>(`${itemPath(item)}/remove-tracks/preview`, {
       method: "POST",
       body: JSON.stringify(body),
     }),
   removeTracks: (
-    id: number | string,
+    item: ItemRef,
     body: RemoveTracksRequest & { confirmed: true; overwrite: boolean },
   ) =>
-    request<Job>(`/api/films/${id}/remove-tracks`, {
+    request<Job>(`${itemPath(item)}/remove-tracks`, {
       method: "POST",
       body: JSON.stringify(body),
     }),
-  previewReplaceOriginal: (id: number | string, copyFile: string) =>
-    request<ReplaceOriginalPreview>(`/api/films/${id}/replace-original/preview`, {
+  previewReplaceOriginal: (item: ItemRef, copyFile: string) =>
+    request<ReplaceOriginalPreview>(`${itemPath(item)}/replace-original/preview`, {
       method: "POST",
       body: JSON.stringify({ copy_file: copyFile }),
     }),
-  replaceOriginal: (id: number | string, copyFile: string) =>
-    request<Job>(`/api/films/${id}/replace-original`, {
+  replaceOriginal: (item: ItemRef, copyFile: string) =>
+    request<Job>(`${itemPath(item)}/replace-original`, {
       method: "POST",
       body: JSON.stringify({ copy_file: copyFile, confirmed: true, understood: true }),
     }),
-  previewHdr10Copy: (id: number | string, file: string) =>
-    request<Hdr10CopyPreview>(`/api/films/${id}/hdr10-copy/preview`, {
+  previewHdr10Copy: (item: ItemRef, file: string) =>
+    request<Hdr10CopyPreview>(`${itemPath(item)}/hdr10-copy/preview`, {
       method: "POST",
       body: JSON.stringify({ file }),
     }),
-  hdr10Copy: (id: number | string, file: string, overwrite: boolean) =>
-    request<Job>(`/api/films/${id}/hdr10-copy`, {
+  hdr10Copy: (item: ItemRef, file: string, overwrite: boolean) =>
+    request<Job>(`${itemPath(item)}/hdr10-copy`, {
       method: "POST",
       body: JSON.stringify({ file, confirmed: true, overwrite }),
     }),
+  shows: () => request<ShowList>("/api/tv"),
+  show: (id: number | string) => request<ShowDetail>(`/api/tv/shows/${id}`),
+  episode: (id: number | string) => request<EpisodeDetail>(`/api/episodes/${id}`),
+  rescanTv: () => request<ScanStatus>("/api/tv/scan", { method: "POST" }),
+  previewBatch: (showId: number, body: BatchRequest) =>
+    request<BatchPreview>(`/api/tv/shows/${showId}/batch/preview`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  startBatch: (showId: number, body: BatchRequest) =>
+    request<BatchStarted>(`/api/tv/shows/${showId}/batch`, {
+      method: "POST",
+      body: JSON.stringify({ ...body, confirmed: true }),
+    }),
+  languages: () => request<Language[]>("/api/languages"),
+  cancelGroup: (groupId: string) =>
+    request<{ cancelled: number }>(`/api/jobs/groups/${groupId}/cancel`, { method: "POST" }),
   recycleSettings: () => request<RecycleSettings>("/api/settings/recycle"),
   saveRecycleSettings: (keepDays: number) =>
     request<RecycleSettings>("/api/settings/recycle", {
