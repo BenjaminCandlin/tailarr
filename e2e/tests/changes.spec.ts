@@ -294,3 +294,42 @@ test("connect Radarr and Plex: titles and posters appear, webhooks are heard", a
   await expect(card.locator("img")).toBeVisible();
   await page.screenshot({ path: "screenshots/changes-radarr-posters.png" });
 });
+
+test("create a rule from an example, switch it on and run it now", async ({
+  page,
+}) => {
+  await page.goto("/rules");
+  await page
+    .getByRole("button", { name: "Remove subtitle tracks that aren't English" })
+    .click();
+  await page.getByRole("button", { name: "Save the rule" }).click();
+  const card = page.getByRole("listitem", {
+    name: "Rule: Only English subtitles",
+  });
+  await expect(card).toContainText("When a new film or episode is added");
+  await card.getByRole("switch").click();
+  await expect(card).toContainText("On");
+  await page.screenshot({
+    path: "screenshots/changes-rules-list.png",
+    fullPage: true,
+  });
+  await card.getByRole("button", { name: /Preview and run now/ }).click();
+  const dialog = page.getByRole("dialog");
+  // The multi-language film and episode (unless an earlier test already made one of them).
+  await expect(dialog.getByTestId("rule-preview-counts")).toContainText(
+    /would get a copy/,
+  );
+  await page.screenshot({ path: "screenshots/changes-rule-run.png" });
+  await dialog.getByRole("button", { name: /^Make \d+ cop/ }).click();
+  await expect(dialog.getByText(/jobs? added to the queue/)).toBeVisible();
+  await dialog.getByRole("link", { name: /Open the Queue/ }).click();
+  const group = page.getByRole("listitem", {
+    name: /Group: Rule “Only English subtitles”/,
+  });
+  await expect(group.getByTestId("group-counts")).toHaveText(
+    /^(\d+) of \1 done$/,
+    {
+      timeout: 60_000,
+    },
+  );
+});

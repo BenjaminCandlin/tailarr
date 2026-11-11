@@ -154,8 +154,8 @@ export function ActionOptions({
     return (
       <div className="flex flex-col gap-1">
         <p className="text-muted-foreground">
-          Episodes without Dolby Vision are skipped, and so are Dolby Vision profile 5 episodes
-          (they have no HDR10 picture underneath, so the colours would be wrong).
+          Files without Dolby Vision are skipped, and so are Dolby Vision profile 5 files (they have
+          no HDR10 picture underneath, so the colours would be wrong).
         </p>
         <Tick checked={choices.overwrite} onChange={(v) => set({ overwrite: v })}>
           Replace HDR10 copies Tailarr made before
@@ -192,7 +192,7 @@ export function ActionOptions({
               />
               <p className="mt-1 text-xs text-muted-foreground">
                 Tracks with no language set, and tracks marked as the original language, are kept
-                too. An episode is skipped if it would be left with no sound.
+                too. A file is skipped if it would be left with no sound.
               </p>
             </div>
           )}
