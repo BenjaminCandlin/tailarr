@@ -77,3 +77,28 @@ def save_library_settings(session: Session, settings: LibrarySettings) -> Librar
     session.add(row)
     session.commit()
     return settings
+
+
+RECYCLE_KEY = "recycle"
+DEFAULT_KEEP_DAYS = 30
+
+
+class RecycleSettings(BaseModel):
+    """How long replaced originals stay in the recycle folder before being deleted."""
+
+    keep_days: int = Field(default=DEFAULT_KEEP_DAYS, ge=1, le=365)
+
+
+def get_recycle_settings(session: Session) -> RecycleSettings:
+    row = session.get(Setting, RECYCLE_KEY)
+    if row is None:
+        return RecycleSettings()
+    return RecycleSettings.model_validate(json.loads(row.value))
+
+
+def save_recycle_settings(session: Session, settings: RecycleSettings) -> RecycleSettings:
+    row = session.get(Setting, RECYCLE_KEY) or Setting(key=RECYCLE_KEY, value="")
+    row.value = settings.model_dump_json()
+    session.add(row)
+    session.commit()
+    return settings

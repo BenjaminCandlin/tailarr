@@ -44,53 +44,6 @@ const defaultSwitch = (page: Page, id: number) =>
 const forcedSwitch = (page: Page, id: number) =>
   trackRow(page, id).getByRole("switch", { name: /^Forced/ });
 
-test("change track settings, confirm, and watch the job finish", async ({ page }) => {
-  // Changes a real file: run it once (on the computer-sized screen), not in parallel twice.
-  test.skip(isPhone(page), "the phone layout of this flow is checked without saving");
-  await openFilm(page, "Bright Lights");
-  await expect(defaultSwitch(page, 1)).toBeChecked();
-
-  // French audio becomes the default: English is switched off automatically.
-  await defaultSwitch(page, 2).click();
-  await expect(defaultSwitch(page, 2)).toBeChecked();
-  await expect(defaultSwitch(page, 1)).not.toBeChecked();
-  await forcedSwitch(page, 3).click();
-  await trackRow(page, 2)
-    .getByRole("button", { name: /^Rename/ })
-    .click();
-  const name = page.getByRole("textbox", { name: /^Name of Audio 2/ });
-  await name.fill("French 5.1");
-  await name.press("Enter");
-  await expect(page.getByTestId("save-bar")).toContainText("3 tracks changed, not saved yet");
-
-  await page.getByRole("button", { name: "Save track changes" }).click();
-  const dialog = page.getByRole("dialog", { name: "Change the original file?" });
-  await expect(dialog).toBeVisible();
-  await expect(dialog.getByTestId("summary-file")).toHaveText(
-    "Bright Lights (2019) Bluray-2160p.mkv",
-  );
-  await expect(dialog).toContainText("Audio 1: English");
-  await expect(dialog).toContainText("Stop it being the default");
-  await expect(dialog).toContainText("Rename it from “Français 5.1” to “French 5.1”");
-  await expect(dialog).toContainText("Mark it as forced");
-  await dialog.getByRole("button", { name: "Change the original file" }).click();
-
-  await expect(page.getByText("Track changes saved")).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText(/3 tracks changed\./)).toBeVisible();
-  await expect(page.getByTestId("save-bar")).toHaveCount(0);
-  // The page now shows the file as it really is.
-  await expect(defaultSwitch(page, 2)).toBeChecked();
-  await expect(defaultSwitch(page, 1)).not.toBeChecked();
-  await expect(forcedSwitch(page, 3)).toBeChecked();
-  await expect(trackRow(page, 2)).toContainText("French 5.1");
-
-  // The finished job is in the queue.
-  await page.getByRole("link", { name: "Queue" }).first().click();
-  const job = page.getByRole("listitem", { name: "Change track settings: Bright Lights (2019)" });
-  await expect(job.first()).toContainText("Done");
-  await expect(job.first()).toContainText("3 tracks changed.");
-});
-
 test("a hardlinked (seeding) file needs 'I understand'", async ({ page }) => {
   await openFilm(page, "Colour Test");
   await forcedSwitch(page, 3).click();

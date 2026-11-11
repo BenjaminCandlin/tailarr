@@ -10,17 +10,19 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from . import __version__
-from .api import films, health, jobs, settings
+from .api import copies, films, health, jobs, settings
 from .core.config import AppConfig
 from .core.db import make_engine
 from .core.settings_store import get_library_settings
-from .jobs import track_settings
+from .jobs import remove_tracks, replace_original, track_settings
 from .jobs.engine import JobQueue
+from .jobs.recycle import RecycleCleaner
 from .library.media_reader import MediaReader
-from .library.scanner import FilmScanner
+from .library.models import FilmFile
+from .library.scanner import FilmScanner, rescan_film_folder
 
 log = logging.getLogger(__name__)
 
@@ -32,7 +34,9 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     if not app.state.film_scanner.start_if_stale():
         app.state.media_reader.start()
     app.state.job_queue.start()
+    app.state.recycle_cleaner.start()
     yield
+    app.state.recycle_cleaner.stop()
     app.state.job_queue.stop()
     app.state.media_reader.stop()
 
@@ -67,13 +71,33 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         except Exception:  # the job's own result matters more than refreshing the page
             log.exception("Couldn't re-read %s after changing it", path)
 
+    def folder_changed(folder: str) -> None:
+        """A job added, replaced or removed files in a film's folder: show it straight away."""
+        try:
+            with Session(engine) as session:
+                film = rescan_film_folder(session, folder, films_root())
+                if film is None:
+                    return
+                files = session.exec(select(FilmFile).where(FilmFile.film_id == film.id)).all()
+                for file in files:
+                    app.state.media_reader.get(session, file.path)  # reads new/changed files
+        except Exception:  # the job's own result matters more than refreshing the page
+            log.exception("Couldn't refresh %s after changing it", folder)
+
     app.state.job_queue = JobQueue(
-        engine, [track_settings.make_job_type(library_roots, file_changed)]
+        engine,
+        [
+            track_settings.make_job_type(library_roots, file_changed),
+            remove_tracks.make_job_type(engine, library_roots, folder_changed),
+            replace_original.make_job_type(engine, library_roots, folder_changed),
+        ],
     )
+    app.state.recycle_cleaner = RecycleCleaner(engine, library_roots)
 
     app.include_router(health.router)
     app.include_router(settings.router)
     app.include_router(films.router)
+    app.include_router(copies.router)
     app.include_router(jobs.router)
 
     _mount_frontend(app, config.static_dir)

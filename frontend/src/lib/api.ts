@@ -87,6 +87,10 @@ export type FilmFile = {
   is_main: boolean;
   hardlinked: boolean;
   media: MediaSummary;
+  /** For copies Tailarr made: the file it was made from. */
+  copy_of: string | null;
+  /** The original is still there, unchanged, so it can be replaced with this copy. */
+  can_replace_original: boolean;
 };
 
 export type FilmDetail = Film & {
@@ -180,6 +184,8 @@ export type Job = {
   message: string | null;
   error: string | null;
   error_details: string | null;
+  /** Facts for the page, e.g. { copy: "Film - Tailarr.mkv" } for a new copy. */
+  result: Record<string, string> | null;
 };
 
 export type JobCounts = { running: number; queued: number };
@@ -205,6 +211,44 @@ export type TrackSettingsPreview = {
   hardlinked: boolean;
   free_space: number;
 };
+
+export type RemoveTracksRequest = {
+  file: string;
+  /** Unique IDs of the tracks to leave out of the copy. */
+  remove: string[];
+  /** Settings for the kept tracks, applied to the copy. */
+  changes: TrackChange[];
+};
+
+export type RemoveTracksPreview = {
+  film_id: number;
+  file: string;
+  new_file: string;
+  /** A Tailarr copy with the new name is already there. */
+  exists: boolean;
+  /** The file being copied is that Tailarr copy itself: it will be updated. */
+  updates_copy: boolean;
+  removed: string[];
+  kept: string[];
+  settings: { label: string; changes: string[] }[];
+  warnings: string[];
+  space_needed: number;
+  free_space: number;
+  enough_space: boolean;
+};
+
+export type ReplaceOriginalPreview = {
+  film_id: number;
+  original: string;
+  original_size: number;
+  copy_file: string;
+  copy_size: number;
+  hardlinked: boolean;
+  keep_days: number;
+  recycle_folder: string;
+};
+
+export type RecycleSettings = { keep_days: number; file_count: number; total_size: number };
 
 export class ApiError extends Error {
   constructor(
@@ -275,6 +319,35 @@ export const api = {
     request<Job>(`/api/films/${id}/track-settings`, {
       method: "POST",
       body: JSON.stringify(body),
+    }),
+  previewRemoveTracks: (id: number | string, body: RemoveTracksRequest) =>
+    request<RemoveTracksPreview>(`/api/films/${id}/remove-tracks/preview`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  removeTracks: (
+    id: number | string,
+    body: RemoveTracksRequest & { confirmed: true; overwrite: boolean },
+  ) =>
+    request<Job>(`/api/films/${id}/remove-tracks`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  previewReplaceOriginal: (id: number | string, copyFile: string) =>
+    request<ReplaceOriginalPreview>(`/api/films/${id}/replace-original/preview`, {
+      method: "POST",
+      body: JSON.stringify({ copy_file: copyFile }),
+    }),
+  replaceOriginal: (id: number | string, copyFile: string) =>
+    request<Job>(`/api/films/${id}/replace-original`, {
+      method: "POST",
+      body: JSON.stringify({ copy_file: copyFile, confirmed: true, understood: true }),
+    }),
+  recycleSettings: () => request<RecycleSettings>("/api/settings/recycle"),
+  saveRecycleSettings: (keepDays: number) =>
+    request<RecycleSettings>("/api/settings/recycle", {
+      method: "PUT",
+      body: JSON.stringify({ keep_days: keepDays }),
     }),
   jobs: () => request<JobList>("/api/jobs"),
   job: (id: number) => request<Job>(`/api/jobs/${id}`),

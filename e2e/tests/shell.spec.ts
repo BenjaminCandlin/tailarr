@@ -27,7 +27,8 @@ for (const theme of ["dark", "light"] as const) {
       await setTheme(page, theme);
       await page.goto(path);
       await expect(page.getByRole("heading", { level: 1, name: heading })).toBeVisible();
-      if (path === "/settings") await expect(page.getByText(/All good|Needs attention/)).toBeVisible();
+      if (path === "/settings")
+        await expect(page.getByText(/All good|Needs attention/)).toBeVisible();
       await expect(page.locator("html")).toHaveClass(theme === "dark" ? /dark/ : /^(?!.*dark)/);
       await expectNoSideways(page);
       await page.screenshot({
@@ -85,6 +86,9 @@ test("system check finds the sample library folders", async ({ page }) => {
     await expect(row.getByLabel("Working")).toBeVisible();
   }
   await expect(
-    folders.getByRole("listitem").filter({ hasText: "Work folder" }).getByLabel(/optional/),
+    folders
+      .getByRole("listitem")
+      .filter({ hasText: "Work folder" })
+      .getByLabel(/optional/),
   ).toBeVisible();
 });

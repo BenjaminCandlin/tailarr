@@ -1,17 +1,23 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, CheckCircle2, Link2, Undo2 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router";
+import { Copy, FileVideo, Link2, Undo2 } from "lucide-react";
+import { useState } from "react";
 
 import { ConfirmSummary } from "@/components/ConfirmSummary";
-import { ProgressBar } from "@/components/ProgressBar";
-import { TechnicalDetails } from "@/components/TechnicalDetails";
+import { CopySummary } from "@/components/CopySummary";
+import { JobFollow, type JobWords } from "@/components/JobFollow";
+import { ReplaceOriginalDialog } from "@/components/ReplaceOriginalDialog";
 import { TrackTable, type TrackEditing, type TrackValues } from "@/components/TrackTable";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { api, type Job, type Track, type TrackChange, type TrackSettingsPreview } from "@/lib/api";
+import {
+  api,
+  type Job,
+  type RemoveTracksPreview,
+  type Track,
+  type TrackChange,
+  type TrackSettingsPreview,
+} from "@/lib/api";
 import { formatSize, plural } from "@/lib/format";
-import { isActive, stepText, useJob } from "@/lib/jobs";
 
 type Draft = Record<string, Partial<TrackValues>>;
 
@@ -37,73 +43,7 @@ export function changesFrom(tracks: Track[], draft: Draft): TrackChange[] {
   return changes;
 }
 
-/** Follows the job that's saving the changes, right where the owner made them. */
-function JobProgress({ jobId, onFinished }: { jobId: number; onFinished: () => void }) {
-  const job = useJob(jobId);
-  const data = job.data;
-  const finished = data !== undefined && !isActive(data);
-  const told = useRef(false);
-  useEffect(() => {
-    if (finished && !told.current) {
-      told.current = true;
-      onFinished();
-    }
-  }, [finished, onFinished]);
-
-  if (!data) {
-    return (
-      <div role="status" className="rounded-lg border bg-muted/50 px-4 py-3 text-sm">
-        Starting…
-      </div>
-    );
-  }
-  if (isActive(data)) {
-    return (
-      <div role="status" className="flex flex-col gap-2 rounded-lg border bg-muted/50 px-4 py-3">
-        <p className="text-sm font-medium">Saving track changes</p>
-        <p className="text-sm text-muted-foreground">{stepText(data)}</p>
-        <ProgressBar value={data.progress} label="Saving track changes" />
-      </div>
-    );
-  }
-  if (data.status === "done") {
-    return (
-      <div
-        role="status"
-        className="flex gap-3 rounded-lg border border-success/40 bg-success-soft px-4 py-3 text-sm"
-      >
-        <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-success" aria-hidden />
-        <div>
-          <p className="font-medium">Track changes saved</p>
-          <p>{data.message}</p>
-        </div>
-      </div>
-    );
-  }
-  return (
-    <div
-      role="alert"
-      className="flex gap-3 rounded-lg border border-destructive/40 bg-destructive-soft px-4 py-3 text-sm"
-    >
-      <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden />
-      <div className="flex min-w-0 flex-col gap-2">
-        <p className="font-medium">
-          {data.status === "cancelled" ? "The changes weren't saved" : "Couldn't save the changes"}
-        </p>
-        <p>{data.error ?? data.message}</p>
-        <TechnicalDetails details={data.error_details} />
-        <p className="text-muted-foreground">
-          Your choices are still on the page, so you can try again.{" "}
-          <Link to="/queue" className="text-primary underline-offset-4 hover:underline">
-            See the queue
-          </Link>
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function Summary({
+function SettingsSummary({
   preview,
   understood,
   onUnderstood,
@@ -165,36 +105,80 @@ function Summary({
   );
 }
 
+const SETTINGS_WORDS: JobWords = {
+  running: "Saving track changes",
+  done: "Track changes saved",
+  failed: "Couldn't save the changes",
+  cancelled: "The changes weren't saved",
+  afterFailure: "Your choices are still on the page, so you can try again.",
+};
+
+const COPY_WORDS: JobWords = {
+  running: "Making the copy",
+  done: "Copy saved",
+  failed: "Couldn't make the copy",
+  cancelled: "The copy wasn't made",
+  afterFailure: "Your original wasn't changed, and your choices are still on the page.",
+};
+
+type Started = { id: number; kind: "settings" | "copy" };
+
 /**
- * The track tables with Default/Forced switches and rename boxes, a "Save track changes"
- * bar, the summary to confirm, and the job's progress.
+ * The track tables with Keep ticks, Default/Forced switches and rename buttons, and a
+ * save bar. With every track ticked, "Save track changes" changes the file itself. With
+ * some unticked, "Save a copy without the unticked tracks" makes a new file instead (with
+ * any setting changes applied to the copy) and leaves the original alone.
  */
 export function TrackSettingsEditor({
   filmId,
   file,
   tracks,
+  onOpenFile,
 }: {
   filmId: number;
   file: string;
   tracks: Track[];
+  /** Show another of the film's files (e.g. the new copy). */
+  onOpenFile?: (name: string) => void;
 }) {
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState<Draft>({});
-  const [preview, setPreview] = useState<TrackSettingsPreview | null>(null);
+  const [removed, setRemoved] = useState<string[]>([]);
+  const [settingsPreview, setSettingsPreview] = useState<TrackSettingsPreview | null>(null);
+  const [copyPreview, setCopyPreview] = useState<RemoveTracksPreview | null>(null);
   const [understood, setUnderstood] = useState(false);
-  const [jobId, setJobId] = useState<number | null>(null);
+  const [overwrite, setOverwrite] = useState(false);
+  const [started, setStarted] = useState<Started | null>(null);
   const [running, setRunning] = useState(false);
+  const [replacing, setReplacing] = useState<string | null>(null);
 
-  const changes = changesFrom(tracks, draft);
+  const copyMode = removed.length > 0;
+  const changes = changesFrom(tracks, draft).filter((c) => !removed.includes(c.uid));
 
-  const check = useMutation({
+  const checkSettings = useMutation({
     mutationFn: () => api.previewTrackSettings(filmId, { file, changes }),
     onSuccess: (data) => {
       setUnderstood(false);
-      setPreview(data);
+      setSettingsPreview(data);
     },
   });
-  const save = useMutation({
+  const checkCopy = useMutation({
+    mutationFn: () => api.previewRemoveTracks(filmId, { file, remove: removed, changes }),
+    onSuccess: (data) => {
+      setOverwrite(data.updates_copy);
+      setCopyPreview(data);
+    },
+  });
+  const check = copyMode ? checkCopy : checkSettings;
+
+  function begin(job: Job, kind: Started["kind"]) {
+    setSettingsPreview(null);
+    setCopyPreview(null);
+    setStarted({ id: job.id, kind });
+    setRunning(true);
+    void queryClient.invalidateQueries({ queryKey: ["jobs"] });
+  }
+  const saveSettings = useMutation({
     mutationFn: () =>
       api.changeTrackSettings(filmId, {
         file,
@@ -202,12 +186,12 @@ export function TrackSettingsEditor({
         confirmed: true,
         allow_hardlinked: understood,
       }),
-    onSuccess: (job) => {
-      setPreview(null);
-      setJobId(job.id);
-      setRunning(true);
-      void queryClient.invalidateQueries({ queryKey: ["jobs"] });
-    },
+    onSuccess: (job) => begin(job, "settings"),
+  });
+  const saveCopy = useMutation({
+    mutationFn: () =>
+      api.removeTracks(filmId, { file, remove: removed, changes, confirmed: true, overwrite }),
+    onSuccess: (job) => begin(job, "copy"),
   });
 
   function values(track: Track): TrackValues {
@@ -217,6 +201,14 @@ export function TrackSettingsEditor({
   const editing: TrackEditing = {
     values,
     changed: (track) => changes.some((c) => c.uid === track.uid),
+    kept: (track) => !removed.includes(track.uid),
+    onKeep: (track, keep) => {
+      setRemoved((current) =>
+        keep ? current.filter((uid) => uid !== track.uid) : [...current, track.uid],
+      );
+      checkSettings.reset();
+      checkCopy.reset();
+    },
     disabled: running,
     onChange: (track, change) => {
       setDraft((current) => {
@@ -236,86 +228,181 @@ export function TrackSettingsEditor({
     },
   };
 
-  const onFinished = () => {
+  const onFinished = (job: Job) => {
     setRunning(false);
-    const job = queryClient.getQueryData<Job>(["jobs", jobId]);
-    if (job?.status === "done") setDraft({});
-    // Show the file as it is now (also in the film list and the film's file list).
+    if (job.status === "done") {
+      setDraft({});
+      setRemoved([]);
+    }
+    // Show the file(s) as they are now (also in the film list and the film's file list).
     void queryClient.invalidateQueries({ queryKey: ["films"] });
     void queryClient.invalidateQueries({ queryKey: ["jobs"] });
   };
 
+  const pending = changes.length > 0 || copyMode;
+
   return (
     <div className="flex flex-col gap-4">
-      <p className="text-sm text-muted-foreground">
-        To change which tracks play by default, which subtitles are forced, or a track's name, use
-        the switches and pencil buttons below, then press{" "}
-        <span className="font-medium text-foreground">Save track changes</span>. You'll see a
-        summary before anything is changed.
-      </p>
+      <div className="flex flex-col gap-1 text-sm text-muted-foreground">
+        <p>
+          <span className="font-medium text-foreground">Change settings:</span> use the switches and
+          pencil buttons to choose default and forced tracks or rename them, then press{" "}
+          <span className="font-medium text-foreground">Save track changes</span>.
+        </p>
+        <p>
+          <span className="font-medium text-foreground">Remove tracks:</span> untick the audio or
+          subtitle tracks you don't want, then press{" "}
+          <span className="font-medium text-foreground">
+            Save a copy without the unticked tracks
+          </span>
+          . Your original stays as it is.
+        </p>
+        <p>You'll always see a summary before anything happens.</p>
+      </div>
       <TrackTable tracks={tracks} editing={editing} />
 
-      {jobId !== null && <JobProgress key={jobId} jobId={jobId} onFinished={onFinished} />}
+      {started !== null && (
+        <JobFollow
+          key={started.id}
+          jobId={started.id}
+          words={started.kind === "copy" ? COPY_WORDS : SETTINGS_WORDS}
+          onFinished={onFinished}
+          doneExtra={(job) =>
+            started.kind === "copy" && job.result?.copy ? (
+              <div className="flex flex-col gap-2 sm:flex-row">
+                {onOpenFile && job.result.copy !== file && (
+                  <Button variant="secondary" onClick={() => onOpenFile(job.result!.copy)}>
+                    <FileVideo aria-hidden />
+                    Show the copy
+                  </Button>
+                )}
+                <Button variant="secondary" onClick={() => setReplacing(job.result!.copy)}>
+                  Replace the original with this copy…
+                </Button>
+              </div>
+            ) : null
+          }
+        />
+      )}
 
-      {changes.length > 0 && !running && (
+      {pending && !running && (
         <div
           className="sticky bottom-20 z-10 flex flex-col gap-2 rounded-xl border border-primary/40 bg-card/95 p-3 shadow-lg backdrop-blur md:bottom-4 md:flex-row md:items-center"
           data-testid="save-bar"
         >
-          <p className="flex-1 text-sm font-medium">
-            {plural(changes.length, "track")} changed, not saved yet
-            {check.isError && (
-              <span role="alert" className="block font-normal text-destructive">
-                {check.error.message}
-              </span>
+          <div className="flex-1 text-sm">
+            <p className="font-medium">
+              {copyMode
+                ? [
+                    `${plural(removed.length, "track")} left out`,
+                    changes.length > 0 && `${plural(changes.length, "track")} changed`,
+                  ]
+                    .filter(Boolean)
+                    .join(", ")
+                : `${plural(changes.length, "track")} changed, not saved yet`}
+            </p>
+            {copyMode && (
+              <p className="text-muted-foreground">
+                Saved as a new copy next to the original. Your original stays as it is.
+              </p>
             )}
-          </p>
-          <div className="flex gap-2">
+            {check.isError && (
+              <p role="alert" className="text-destructive">
+                {check.error.message}
+              </p>
+            )}
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row">
             <Button
               variant="ghost"
               onClick={() => {
                 setDraft({});
-                check.reset();
+                setRemoved([]);
+                checkSettings.reset();
+                checkCopy.reset();
               }}
-              className="flex-1 md:flex-none"
             >
               <Undo2 aria-hidden />
               Undo changes
             </Button>
-            <Button
-              onClick={() => check.mutate()}
-              disabled={check.isPending}
-              className="flex-1 md:flex-none"
-            >
-              {check.isPending ? "Checking…" : "Save track changes"}
+            <Button onClick={() => check.mutate()} disabled={check.isPending}>
+              {copyMode && <Copy aria-hidden />}
+              {check.isPending
+                ? "Checking…"
+                : copyMode
+                  ? "Save a copy without the unticked tracks"
+                  : "Save track changes"}
             </Button>
           </div>
         </div>
       )}
 
-      {preview && (
+      {settingsPreview && (
         <ConfirmSummary
           open
           onOpenChange={(open) => {
             if (!open) {
-              setPreview(null);
-              save.reset();
+              setSettingsPreview(null);
+              saveSettings.reset();
             }
           }}
           title="Change the original file?"
           description={`This changes the track settings inside the file itself. ${plural(
-            preview.tracks.length,
+            settingsPreview.tracks.length,
             "track",
           )} will change.`}
           confirmLabel="Change the original file"
           destructive
-          onConfirm={() => save.mutate()}
-          confirmDisabled={preview.hardlinked && !understood}
-          pending={save.isPending}
-          error={save.isError ? save.error.message : null}
+          onConfirm={() => saveSettings.mutate()}
+          confirmDisabled={settingsPreview.hardlinked && !understood}
+          pending={saveSettings.isPending}
+          error={saveSettings.isError ? saveSettings.error.message : null}
         >
-          <Summary preview={preview} understood={understood} onUnderstood={setUnderstood} />
+          <SettingsSummary
+            preview={settingsPreview}
+            understood={understood}
+            onUnderstood={setUnderstood}
+          />
         </ConfirmSummary>
+      )}
+
+      {copyPreview && (
+        <ConfirmSummary
+          open
+          onOpenChange={(open) => {
+            if (!open) {
+              setCopyPreview(null);
+              saveCopy.reset();
+            }
+          }}
+          title={
+            copyPreview.updates_copy ? "Update this copy?" : "Make a copy without these tracks?"
+          }
+          description={
+            copyPreview.updates_copy
+              ? "This is a copy Tailarr made, so it's updated. Your original isn't touched."
+              : "A new file is made next to the original. Your original isn't changed."
+          }
+          confirmLabel={copyPreview.updates_copy ? "Update the copy" : "Make the copy"}
+          onConfirm={() => saveCopy.mutate()}
+          confirmDisabled={
+            !copyPreview.enough_space ||
+            (copyPreview.exists && !copyPreview.updates_copy && !overwrite)
+          }
+          pending={saveCopy.isPending}
+          error={saveCopy.isError ? saveCopy.error.message : null}
+        >
+          <CopySummary preview={copyPreview} overwrite={overwrite} onOverwrite={setOverwrite} />
+        </ConfirmSummary>
+      )}
+
+      {replacing && (
+        <ReplaceOriginalDialog
+          filmId={filmId}
+          copyFile={replacing}
+          open
+          onOpenChange={(open) => !open && setReplacing(null)}
+        />
       )}
     </div>
   );

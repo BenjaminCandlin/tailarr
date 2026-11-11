@@ -1,11 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Clapperboard, FileVideo, Link2 } from "lucide-react";
+import { ArrowLeft, Clapperboard, FileVideo, Link2, Replace } from "lucide-react";
+import { useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router";
 
 import { EmptyState } from "@/components/EmptyState";
 import { FileContents } from "@/components/FileContents";
 import { MediaBadges } from "@/components/MediaBadges";
 import { Poster } from "@/components/Poster";
+import { ReplaceOriginalDialog } from "@/components/ReplaceOriginalDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,7 +26,16 @@ function BackLink() {
   );
 }
 
-function FileRow({ file }: { file: FilmFile }) {
+function FileRow({
+  file,
+  filmId,
+  onReplaced,
+}: {
+  file: FilmFile;
+  filmId: number;
+  onReplaced: () => void;
+}) {
+  const [replacing, setReplacing] = useState(false);
   return (
     <li className="flex flex-col gap-2 py-3 first:pt-0 last:pb-0">
       <div className="flex items-start gap-3">
@@ -59,6 +70,28 @@ function FileRow({ file }: { file: FilmFile }) {
         <p className="pl-8 text-xs text-muted-foreground">
           Tailarr can only change MKV files, so this one is shown for information only.
         </p>
+      )}
+      {file.copy_of && (
+        <p className="pl-8 text-xs text-muted-foreground [overflow-wrap:anywhere]">
+          Made from {file.copy_of}
+        </p>
+      )}
+      {file.can_replace_original && (
+        <div className="pl-8">
+          <Button variant="secondary" onClick={() => setReplacing(true)}>
+            <Replace aria-hidden />
+            Replace the original with this copy…
+          </Button>
+          {replacing && (
+            <ReplaceOriginalDialog
+              filmId={filmId}
+              copyFile={file.name}
+              open
+              onOpenChange={setReplacing}
+              onReplaced={onReplaced}
+            />
+          )}
+        </div>
       )}
     </li>
   );
@@ -183,7 +216,11 @@ function FilmDetail({ film }: { film: FilmDetailData }) {
                 key={selected.name}
                 queryKey={["films", String(film.id), "media", selected.name]}
                 load={(refresh) => api.filmMedia(film.id, selected.name, refresh)}
-                edit={selected.is_mkv ? { filmId: film.id, file: selected.name } : undefined}
+                edit={
+                  selected.is_mkv
+                    ? { filmId: film.id, file: selected.name, onOpenFile: choose }
+                    : undefined
+                }
               />
             </CardContent>
           </Card>
@@ -196,7 +233,12 @@ function FilmDetail({ film }: { film: FilmDetailData }) {
           <CardContent>
             <ul className="divide-y">
               {film.files.map((file) => (
-                <FileRow key={file.name} file={file} />
+                <FileRow
+                  key={file.name}
+                  file={file}
+                  filmId={film.id}
+                  onReplaced={() => choose(film.main_file ?? "")}
+                />
               ))}
             </ul>
           </CardContent>

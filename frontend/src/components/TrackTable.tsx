@@ -2,6 +2,7 @@ import { Check, Minus, Pencil } from "lucide-react";
 import { useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import type { Track, TrackType } from "@/lib/api";
 import { explainHdr } from "@/lib/hdr";
@@ -21,6 +22,9 @@ export type TrackEditing = {
   values: (track: Track) => TrackValues;
   changed: (track: Track) => boolean;
   onChange: (track: Track, change: Partial<TrackValues>) => void;
+  /** Ticked: the track stays. Unticked tracks are left out of a new copy. */
+  kept: (track: Track) => boolean;
+  onKeep: (track: Track, keep: boolean) => void;
   disabled?: boolean;
 };
 
@@ -182,6 +186,28 @@ function FlagCell({
   );
 }
 
+/** The "Keep" tick for an audio or subtitle track. */
+function KeepBox({
+  track,
+  label,
+  editing,
+}: {
+  track: Track;
+  label: string;
+  editing: TrackEditing;
+}) {
+  return (
+    <Checkbox
+      checked={editing.kept(track)}
+      onCheckedChange={(checked) => editing.onKeep(track, checked === true)}
+      disabled={editing.disabled}
+      aria-label={`Keep ${label}`}
+      // A bigger tap area around the small box.
+      className="relative after:absolute after:-inset-3 after:content-['']"
+    />
+  );
+}
+
 const HEAD =
   "px-3 py-2 text-left text-xs font-medium tracking-wide text-muted-foreground uppercase";
 const CELL = "px-3 py-2.5 align-top";
@@ -212,6 +238,7 @@ function GroupTable({
             </>
           ) : (
             <>
+              {editing && <th className={cn(HEAD, "w-16 text-center")}>Keep</th>}
               <th className={HEAD}>Language</th>
               <th className={HEAD}>Format</th>
               <th className={HEAD}>Title</th>
@@ -229,6 +256,7 @@ function GroupTable({
             className={cn(
               editing && "[&>td]:align-middle",
               editing?.changed(track) && "bg-accent/40",
+              editing && !editing.kept(track) && "bg-destructive-soft/40 text-muted-foreground",
             )}
           >
             {video ? (
@@ -245,7 +273,22 @@ function GroupTable({
               </>
             ) : (
               <>
-                <td className={cn(CELL, "font-medium")}>{language(track)}</td>
+                {editing && (
+                  <td className={cn(CELL, "text-center")}>
+                    <span className="inline-flex">
+                      <KeepBox track={track} label={trackLabel(track, all)} editing={editing} />
+                    </span>
+                  </td>
+                )}
+                <td
+                  className={cn(
+                    CELL,
+                    "font-medium",
+                    editing && !editing.kept(track) && "line-through",
+                  )}
+                >
+                  {language(track)}
+                </td>
                 <td className={CELL}>{trackFormat(track)}</td>
                 <td className={cn(CELL, "[overflow-wrap:anywhere]")}>
                   <div className="flex flex-col gap-1">
@@ -300,12 +343,21 @@ function GroupCards({
             className={cn(
               "rounded-lg border bg-background/40 px-3 py-2.5 text-sm",
               editing?.changed(track) && "border-primary/60 bg-accent/40",
+              editing &&
+                !editing.kept(track) &&
+                "border-destructive/40 bg-destructive-soft/40 text-muted-foreground",
             )}
           >
             <div className="flex items-start justify-between gap-2">
-              <p className="font-medium">
+              <p className={cn("font-medium", editing && !editing.kept(track) && "line-through")}>
                 {track.type === "video" ? trackFormat(track) : language(track)}
               </p>
+              {editing && track.type !== "video" && (
+                <label className="-my-2 flex min-h-11 shrink-0 cursor-pointer items-center gap-2 text-sm font-medium">
+                  Keep
+                  <KeepBox track={track} label={label} editing={editing} />
+                </label>
+              )}
               {track.type !== "video" && !editing && (
                 <span className="flex shrink-0 gap-1">
                   {track.default && <Badge tone="accent">Default</Badge>}

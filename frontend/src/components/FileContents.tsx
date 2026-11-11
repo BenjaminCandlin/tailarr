@@ -120,7 +120,7 @@ export function FileContents({
   queryKey: unknown[];
   load: (refresh: boolean) => Promise<Media>;
   /** Allow changing track settings (MKV files only). */
-  edit?: { filmId: number; file: string };
+  edit?: { filmId: number; file: string; onOpenFile?: (name: string) => void };
 }) {
   const queryClient = useQueryClient();
   const media = useQuery({ queryKey, queryFn: () => load(false), retry: false });
@@ -173,7 +173,12 @@ export function FileContents({
       )}
       <HdrNote media={data} />
       {edit ? (
-        <TrackSettingsEditor filmId={edit.filmId} file={edit.file} tracks={data.tracks} />
+        <TrackSettingsEditor
+          filmId={edit.filmId}
+          file={edit.file}
+          tracks={data.tracks}
+          onOpenFile={edit.onOpenFile}
+        />
       ) : (
         <TrackTable tracks={data.tracks} />
       )}

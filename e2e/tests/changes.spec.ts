@@ -1,0 +1,132 @@
+/**
+ * Flows that really change sample files (the "Bright Lights" film), one after the other.
+ * They run in their own project, after every other browser test has finished, so they
+ * never change a file another test is looking at.
+ */
+import { expect, test, type Page } from "@playwright/test";
+
+const isPhone = (page: Page) => (page.viewportSize()?.width ?? 0) < 768;
+
+type FilmSummary = { id: number; title: string; media: { read: boolean } };
+
+/** The film's page, once Tailarr has read every sample file's details. */
+async function openFilm(page: Page, title: string) {
+  let id = 0;
+  await expect
+    .poll(
+      async () => {
+        const body = await (await page.request.get("/api/films")).json();
+        const films: FilmSummary[] = body.films;
+        id = films.find((f) => f.title === title)?.id ?? 0;
+        return films.every((f) => f.media.read);
+      },
+      { timeout: 60_000 },
+    )
+    .toBe(true);
+  await page.goto(`/films/${id}`);
+  await expect(page.getByRole("heading", { level: 1, name: new RegExp(title) })).toBeVisible();
+  return id;
+}
+
+/** A track as shown: a table row on PCs, a card on phones. */
+function trackRow(page: Page, id: number) {
+  return page.getByTestId(isPhone(page) ? `track-card-${id}` : `track-${id}`);
+}
+
+const defaultSwitch = (page: Page, id: number) =>
+  trackRow(page, id).getByRole("switch", { name: /^Default/ });
+const forcedSwitch = (page: Page, id: number) =>
+  trackRow(page, id).getByRole("switch", { name: /^Forced/ });
+
+test.describe.configure({ mode: "serial" });
+
+test("change track settings, confirm, and watch the job finish", async ({ page }) => {
+  await openFilm(page, "Bright Lights");
+  await expect(defaultSwitch(page, 1)).toBeChecked();
+
+  // French audio becomes the default: English is switched off automatically.
+  await defaultSwitch(page, 2).click();
+  await expect(defaultSwitch(page, 2)).toBeChecked();
+  await expect(defaultSwitch(page, 1)).not.toBeChecked();
+  await forcedSwitch(page, 3).click();
+  await trackRow(page, 2)
+    .getByRole("button", { name: /^Rename/ })
+    .click();
+  const name = page.getByRole("textbox", { name: /^Name of Audio 2/ });
+  await name.fill("French 5.1");
+  await name.press("Enter");
+  await expect(page.getByTestId("save-bar")).toContainText("3 tracks changed, not saved yet");
+
+  await page.getByRole("button", { name: "Save track changes" }).click();
+  const dialog = page.getByRole("dialog", { name: "Change the original file?" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByTestId("summary-file")).toHaveText(
+    "Bright Lights (2019) Bluray-2160p.mkv",
+  );
+  await expect(dialog).toContainText("Audio 1: English");
+  await expect(dialog).toContainText("Stop it being the default");
+  await expect(dialog).toContainText("Rename it from “Français 5.1” to “French 5.1”");
+  await expect(dialog).toContainText("Mark it as forced");
+  await dialog.getByRole("button", { name: "Change the original file" }).click();
+
+  await expect(page.getByText("Track changes saved")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(/3 tracks changed\./)).toBeVisible();
+  await expect(page.getByTestId("save-bar")).toHaveCount(0);
+  // The page now shows the file as it really is.
+  await expect(defaultSwitch(page, 2)).toBeChecked();
+  await expect(defaultSwitch(page, 1)).not.toBeChecked();
+  await expect(forcedSwitch(page, 3)).toBeChecked();
+  await expect(trackRow(page, 2)).toContainText("French 5.1");
+
+  // The finished job is in the queue.
+  await page.getByRole("link", { name: "Queue" }).first().click();
+  const job = page.getByRole("listitem", { name: "Change track settings: Bright Lights (2019)" });
+  await expect(job.first()).toContainText("Done");
+  await expect(job.first()).toContainText("3 tracks changed.");
+});
+
+test("remove a track into a copy, then replace the original with it", async ({ page }) => {
+  await openFilm(page, "Bright Lights");
+  // After the test above: English isn't the default any more, French is.
+  await trackRow(page, 1).getByRole("checkbox", { name: /^Keep/ }).click();
+  await expect(page.getByTestId("save-bar")).toContainText("1 track left out");
+  await page.getByRole("button", { name: "Save a copy without the unticked tracks" }).click();
+
+  const dialog = page.getByRole("dialog", { name: "Make a copy without these tracks?" });
+  await expect(dialog.getByTestId("summary-new-file")).toHaveText(
+    "Bright Lights (2019) Bluray-2160p - Tailarr.mkv",
+  );
+  await expect(dialog.getByRole("list", { name: "Left out of the copy" })).toContainText(
+    "Audio 1: English",
+  );
+  await expect(dialog).not.toContainText("None of the audio tracks left");
+  await dialog.getByRole("button", { name: "Make the copy" }).click();
+  await expect(page.getByText("Copy saved", { exact: true })).toBeVisible({ timeout: 30_000 });
+
+  // The copy has one audio track; the original still has two.
+  await page.getByRole("button", { name: "Show the copy" }).click();
+  await expect(page).toHaveURL(/file=/);
+  await expect(page.getByRole("region", { name: /^Audio/ })).toContainText("Audio (1)");
+  await expect(trackRow(page, 1)).toContainText("French");
+
+  await page.getByRole("button", { name: "Replace the original with this copy…" }).click();
+  const replace = page.getByRole("dialog", { name: "Replace the original with this copy?" });
+  await expect(replace.getByTestId("replace-original")).toHaveText(
+    "Bright Lights (2019) Bluray-2160p.mkv",
+  );
+  await expect(replace).toContainText("deleted after 30 days");
+  const confirm = replace.getByRole("button", { name: "Replace the original" });
+  await expect(confirm).toBeDisabled();
+  await replace.getByRole("checkbox", { name: /I understand/ }).click();
+  await confirm.click();
+  await expect(page.getByText("Original replaced", { exact: true })).toBeVisible({
+    timeout: 30_000,
+  });
+  await page.getByText("Close", { exact: true }).click();
+
+  // One file again, with the copy's tracks under the original's name.
+  await expect(page.getByRole("combobox", { name: "File" })).toHaveCount(0);
+  await expect(page.getByRole("region", { name: /^Audio/ })).toContainText("Audio (1)");
+  const recycle = await (await page.request.get("/api/settings/recycle")).json();
+  expect(recycle.file_count).toBe(1);
+});
