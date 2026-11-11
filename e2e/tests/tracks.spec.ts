@@ -3,12 +3,17 @@ import { expect, test, type Page } from "@playwright/test";
 const isPhone = (page: Page) => (page.viewportSize()?.width ?? 0) < 768;
 
 async function setTheme(page: Page, theme: "dark" | "light") {
-  await page.addInitScript((t) => localStorage.setItem("tailarr-theme", t), theme);
+  await page.addInitScript(
+    (t) => localStorage.setItem("tailarr-theme", t),
+    theme,
+  );
 }
 
 async function expectNoSideways(page: Page) {
   const overflow = await page.evaluate(
-    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    () =>
+      document.documentElement.scrollWidth -
+      document.documentElement.clientWidth,
   );
   expect(overflow, "page should not scroll sideways").toBeLessThanOrEqual(0);
 }
@@ -21,7 +26,9 @@ async function openFilmsWithDetails(page: Page, path = "/films") {
     .poll(
       async () => {
         const body = await (await page.request.get("/api/films")).json();
-        return body.films.every((f: { media: { read: boolean } }) => f.media.read);
+        return body.films.every(
+          (f: { media: { read: boolean } }) => f.media.read,
+        );
       },
       { timeout: 60_000 },
     )
@@ -35,7 +42,9 @@ async function openFilm(page: Page, title: string) {
   await films(page)
     .getByRole("link", { name: new RegExp(title) })
     .click();
-  await expect(page.getByRole("heading", { level: 1, name: new RegExp(title) })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { level: 1, name: new RegExp(title) }),
+  ).toBeVisible();
 }
 
 /** A track as shown: a table row on PCs, a card on phones. */
@@ -50,19 +59,27 @@ test("HDR badges on posters and the Dolby Vision filter", async ({ page }) => {
   await expect(colour.getByText("DV", { exact: true })).toBeVisible();
   await expect(colour.getByText("Dolby Vision profile 8.1")).toBeAttached();
   await expect(
-    cards.filter({ hasText: "Ärger im Paradies" }).getByText("HDR10+", { exact: true }),
+    cards
+      .filter({ hasText: "Ärger im Paradies" })
+      .getByText("HDR10+", { exact: true }),
   ).toBeVisible();
   await expect(
-    cards.filter({ hasText: "Bright Lights" }).getByText("HDR10", { exact: true }),
+    cards
+      .filter({ hasText: "Bright Lights" })
+      .getByText("HDR10", { exact: true }),
   ).toBeVisible();
 
-  await page.getByRole("combobox", { name: "Show" }).selectOption({ label: "Has Dolby Vision" });
+  await page
+    .getByRole("combobox", { name: "Show" })
+    .selectOption({ label: "Has Dolby Vision" });
   await expect(page).toHaveURL(/show=dv/);
   await expect(cards).toHaveCount(3);
   for (const title of ["Blu-ray Night", "Colour Test", "Streaming Only"]) {
     await expect(cards.filter({ hasText: title })).toHaveCount(1);
   }
-  await page.getByRole("combobox", { name: "Show" }).selectOption({ label: "No HDR" });
+  await page
+    .getByRole("combobox", { name: "Show" })
+    .selectOption({ label: "No HDR" });
   await expect(cards.filter({ hasText: "The Long Weekend" })).toHaveCount(1);
   await expect(cards.filter({ hasText: "Colour Test" })).toHaveCount(0);
   await expectNoSideways(page);
@@ -71,7 +88,9 @@ test("HDR badges on posters and the Dolby Vision filter", async ({ page }) => {
 test("a film's tracks, with friendly names", async ({ page }) => {
   await openFilm(page, "Sample Multi-Language Film");
   await expect(page.getByText("3 seconds")).toBeVisible();
-  await expect(page.getByTestId("hdr-note")).toContainText("Normal picture (SDR)");
+  await expect(page.getByTestId("hdr-note")).toContainText(
+    "Normal picture (SDR)",
+  );
 
   await expect(trackRow(page, 0)).toContainText("H.264 (AVC)");
   await expect(trackRow(page, 0)).toContainText("320 × 180 · 23.976 fps");
@@ -81,9 +100,15 @@ test("a film's tracks, with friendly names", async ({ page }) => {
   await expect(trackRow(page, 2)).toContainText("Français 5.1");
   await expect(trackRow(page, 3)).toContainText("Japanese");
   await expect(trackRow(page, 5)).toContainText("English (Forced)");
-  await expect(trackRow(page, 5).getByRole("switch", { name: /^Forced/ })).toBeChecked();
-  await expect(trackRow(page, 4).getByRole("switch", { name: /^Default/ })).toBeChecked();
-  await expect(trackRow(page, 6).getByRole("switch", { name: /^Default/ })).not.toBeChecked();
+  await expect(
+    trackRow(page, 5).getByRole("switch", { name: /^Forced/ }),
+  ).toBeChecked();
+  await expect(
+    trackRow(page, 4).getByRole("switch", { name: /^Default/ }),
+  ).toBeChecked();
+  await expect(
+    trackRow(page, 6).getByRole("switch", { name: /^Default/ }),
+  ).not.toBeChecked();
   await expect(trackRow(page, 7)).toContainText("Spanish");
   await expectNoSideways(page);
 });
@@ -97,10 +122,12 @@ test("Dolby Vision profile 5 is explained", async ({ page }) => {
 
 test("switching to the copy made by Tailarr", async ({ page }) => {
   await openFilm(page, "Colour Test");
-  await expect(page.getByTestId("hdr-note")).toContainText("Dolby Vision profile 8.1 with HDR10");
-  await page
-    .getByRole("combobox", { name: "File" })
-    .selectOption({ label: "Copy: Colour Test (2023) WEBDL-2160p DV HDR10 - HDR10.mkv" });
+  await expect(page.getByTestId("hdr-note")).toContainText(
+    "Dolby Vision profile 8.1 with HDR10",
+  );
+  await page.getByRole("combobox", { name: "File" }).selectOption({
+    label: "Copy: Colour Test (2023) WEBDL-2160p DV HDR10 - HDR10.mkv",
+  });
   await expect(page).toHaveURL(/file=/);
   await expect(page.getByTestId("hdr-note")).toContainText("HDR10");
   await expect(page.getByTestId("hdr-note")).not.toContainText("Dolby Vision");
@@ -113,7 +140,9 @@ for (const theme of ["dark", "light"] as const) {
     const name = `${testInfo.project.name}-${theme}`;
     await openFilmsWithDetails(page);
     for (const img of await films(page).locator("img").all()) {
-      await expect.poll(() => img.evaluate((i: HTMLImageElement) => i.complete)).toBe(true);
+      await expect
+        .poll(() => img.evaluate((i: HTMLImageElement) => i.complete))
+        .toBe(true);
     }
     await page.screenshot({ path: `screenshots/${name}-films-badges.png` });
 
@@ -122,13 +151,19 @@ for (const theme of ["dark", "light"] as const) {
       .click();
     await expect(trackRow(page, 7)).toBeVisible();
     await expectNoSideways(page);
-    await page.screenshot({ path: `screenshots/${name}-film-tracks.png`, fullPage: true });
+    await page.screenshot({
+      path: `screenshots/${name}-film-tracks.png`,
+      fullPage: true,
+    });
 
     await page.goBack();
     await films(page)
       .getByRole("link", { name: /Streaming Only/ })
       .click();
     await expect(page.getByTestId("hdr-note")).toContainText("profile 5");
-    await page.screenshot({ path: `screenshots/${name}-film-dv-profile-5.png`, fullPage: true });
+    await page.screenshot({
+      path: `screenshots/${name}-film-dv-profile-5.png`,
+      fullPage: true,
+    });
   });
 }
