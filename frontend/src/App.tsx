@@ -7,6 +7,7 @@ import { FilmDetailPage } from "@/pages/FilmDetailPage";
 import { FilmsPage } from "@/pages/FilmsPage";
 import { NotFoundPage } from "@/pages/NotFoundPage";
 import { QueuePage } from "@/pages/QueuePage";
+import { RuleEditorPage } from "@/pages/RuleEditorPage";
 import { RulesPage } from "@/pages/RulesPage";
 import { SettingsPage } from "@/pages/SettingsPage";
 import { EpisodePage } from "@/pages/EpisodePage";
@@ -24,6 +25,8 @@ export function AppRoutes() {
         <Route path="tv/shows/:id" element={<ShowPage />} />
         <Route path="tv/episodes/:id" element={<EpisodePage />} />
         <Route path="rules" element={<RulesPage />} />
+        <Route path="rules/new" element={<RuleEditorPage />} />
+        <Route path="rules/:id" element={<RuleEditorPage />} />
         <Route path="queue" element={<QueuePage />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="*" element={<NotFoundPage />} />
