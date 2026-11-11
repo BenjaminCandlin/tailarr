@@ -246,6 +246,8 @@ export type ReplaceOriginalPreview = {
   hardlinked: boolean;
   keep_days: number;
   recycle_folder: string;
+  /** An HDR10 copy: replacing the original removes Dolby Vision from the film. */
+  loses_dolby_vision: boolean;
 };
 
 export type Hdr10CopyPreview = {

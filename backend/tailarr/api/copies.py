@@ -198,6 +198,8 @@ class ReplaceOriginalPreviewOut(BaseModel):
     hardlinked: bool  # the original is also in the downloads folder (still seeding)
     keep_days: int
     recycle_folder: str
+    # An HDR10 copy: replacing the original removes Dolby Vision from the film for good.
+    loses_dolby_vision: bool
 
 
 def _replace_preview(
@@ -209,8 +211,6 @@ def _replace_preview(
     record = session.get(CopyRecord, copy.path)
     if record is None:
         raise HTTPException(status_code=400, detail=replace_original.NO_RECORD)
-    if record.kind != replace_original.REPLACEABLE_KIND:
-        raise HTTPException(status_code=400, detail=replace_original.NOT_REPLACEABLE)
     original = _mkv_file(session, config, film, Path(record.source_path).name)
     if original.path != record.source_path:
         raise HTTPException(status_code=400, detail=replace_original.NO_RECORD)
@@ -230,6 +230,7 @@ def _replace_preview(
         hardlinked=original_stat.st_nlink > 1,
         keep_days=get_recycle_settings(session).keep_days,
         recycle_folder=str(Path(original.path).parent / RECYCLE_FOLDER),
+        loses_dolby_vision=record.kind == replace_original.LOSES_DOLBY_VISION_KIND,
     )
     return preview, original, copy, film
 

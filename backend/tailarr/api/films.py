@@ -19,7 +19,6 @@ from ..core.paths import is_inside
 from ..core.settings_store import get_library_settings
 from ..jobs.engine import JobQueue
 from ..jobs.models import CopyRecord
-from ..jobs.replace_original import REPLACEABLE_KIND
 from ..jobs.track_settings import HARDLINK_REFUSAL, TrackChange, TracksChangedError
 from ..jobs.track_settings import KIND as TRACK_SETTINGS
 from ..jobs.track_settings import TITLE as TRACK_SETTINGS_TITLE
@@ -262,7 +261,6 @@ def film_detail(
         source = by_path.get(record.source_path) if record else None
         return (
             record is not None
-            and record.kind == REPLACEABLE_KIND
             and source is not None
             and source.size == record.source_size
             and abs(source.mtime - record.source_mtime) < 1e-3

@@ -235,13 +235,34 @@ def test_profile_8_copy(app_client: TestClient, library: Path, tmp_path: Path) -
     hdr10 = next(f for f in files if f["name"] == COLOUR_COPY)
     assert hdr10["copy_of"] == COLOUR_FILE
     assert hdr10["media"]["hdr"] == ["HDR10"]
-    # An HDR10 copy sits next to the original; it isn't offered as a replacement.
-    assert hdr10["can_replace_original"] is False
+    # It can replace the original, but only if the owner chooses to: the summary says
+    # plainly that Dolby Vision would be gone.
+    assert hdr10["can_replace_original"] is True
     response = app_client.post(
         f"/api/films/{film_id}/replace-original/preview", json={"copy_file": COLOUR_COPY}
     )
-    assert response.status_code == 400
-    assert "Dolby Vision TVs can still play the original" in response.json()["detail"]
+    assert response.status_code == 200, response.text
+    assert response.json()["loses_dolby_vision"] is True
+
+
+def test_replace_the_original_with_an_hdr10_copy(app_client: TestClient, library: Path) -> None:
+    film_id = _film_id(app_client, "Blu-ray Night")
+    assert _copy(app_client, film_id, BLURAY_FILE)["status"] == "done"
+    copy = hdr10_copy.output_name(BLURAY_FILE)
+    response = app_client.post(
+        f"/api/films/{film_id}/replace-original",
+        json={"copy_file": copy, "confirmed": True, "understood": True},
+    )
+    assert response.status_code == 202, response.text
+    job = _wait(app_client, response.json()["id"])
+    assert job["status"] == "done", job
+    original = library / BLURAY / BLURAY_FILE
+    assert describe(read_file(original)).hdr.dv_profile is None  # the copy took its place
+    recycled = library / BLURAY / ".tailarr-recycle" / BLURAY_FILE
+    assert describe(read_file(recycled)).hdr.dv_profile == 7  # the original waits there
+    detail = app_client.get(f"/api/films/{film_id}").json()
+    assert [f["name"] for f in detail["files"]] == [BLURAY_FILE]
+    assert detail["media"]["hdr"] == ["HDR10"]
 
 
 def test_profile_7_blu_ray_copy(app_client: TestClient, library: Path, tmp_path: Path) -> None:

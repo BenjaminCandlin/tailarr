@@ -148,7 +148,16 @@ test("make a copy without Dolby Vision of a UHD Blu-ray style film", async ({ pa
   await expect(page.getByTestId("hdr-note")).toContainText("HDR10");
   await expect(page.getByTestId("hdr-note")).not.toContainText("Dolby Vision");
   await expect(page.getByTestId("dv-action")).toHaveCount(0);
-  // The copy sits next to the original (a second version in Plex), not replacing it.
+  // The copy sits next to the original (a second version in Plex). Replacing the original
+  // is possible, but only on request, with a plain warning that Dolby Vision would be gone.
   await expect(page.getByText("Made from Blu-ray Night (2018) Remux-2160p.mkv")).toBeVisible();
-  await expect(page.getByRole("button", { name: /Replace the original/ })).toHaveCount(0);
+  await page.getByRole("button", { name: "Replace the original with this copy…" }).click();
+  const replace = page.getByRole("dialog", { name: "Replace the original with this copy?" });
+  await expect(replace.getByTestId("loses-dolby-vision")).toContainText(
+    "Dolby Vision will be gone from this film",
+  );
+  await page.waitForTimeout(300); // let the dialog finish appearing
+  await page.screenshot({ path: "screenshots/changes-replace-with-hdr10.png" });
+  await replace.getByRole("button", { name: "Cancel" }).click();
+  await expect(replace).toHaveCount(0);
 });

@@ -33,6 +33,7 @@ const REPLACE: ReplaceOriginalPreview = {
   hardlinked: true,
   keep_days: 30,
   recycle_folder: "/data/media/movies/Colour Test (2023)/.tailarr-recycle",
+  loses_dolby_vision: false,
 };
 
 // The page has both the table (computers) and the cards (phones); the table comes first.
@@ -223,6 +224,9 @@ describe("replacing the original", () => {
         "is emptied, the original's 7.8 GB is freed, leaving just the copy. The copy is 1.1 MB " +
         "smaller than the original, because of the tracks you left out.",
     );
+    expect(spaceText({ ...preview, loses_dolby_vision: true })).toMatch(
+      /because the Dolby Vision information is left out\.$/,
+    );
     expect(spaceText({ ...preview, hardlinked: true })).toMatch(
       /its 7\.8 GB is only freed once the recycle folder is emptied and the torrent is removed/,
     );
@@ -272,6 +276,7 @@ describe("replacing the original", () => {
     expect(dialog).toHaveTextContent("deleted after 30 days");
     expect(dialog).toHaveTextContent(".tailarr-recycle");
     expect(dialog).toHaveTextContent("The original is also in your downloads");
+    expect(within(dialog).queryByTestId("loses-dolby-vision")).toBeNull();
     const confirm = within(dialog).getByRole("button", { name: "Replace the original" });
     expect(confirm).toBeDisabled();
     await userEvent.click(within(dialog).getByRole("checkbox", { name: /I understand/ }));
@@ -280,6 +285,30 @@ describe("replacing the original", () => {
     expect(replaced).toBe(true);
     await userEvent.click(screen.getByText("Close", { selector: "button" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  it("warns plainly when an HDR10 copy would take Dolby Vision away", async () => {
+    mockBackend((url) => {
+      if (url.endsWith("/api/films/5")) return json(withCopy);
+      if (url.endsWith("/replace-original/preview"))
+        return json({ ...REPLACE, loses_dolby_vision: true });
+      return undefined;
+    });
+    await openFilm();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Replace the original with this copy…" }),
+    );
+    const dialog = await screen.findByRole("dialog");
+    expect(await within(dialog).findByTestId("loses-dolby-vision")).toHaveTextContent(
+      "Dolby Vision will be gone from this film",
+    );
+    const tick = within(dialog).getByRole("checkbox", {
+      name: "I understand my original will be replaced and Dolby Vision will be gone",
+    });
+    const confirm = within(dialog).getByRole("button", { name: "Replace the original" });
+    expect(confirm).toBeDisabled();
+    await userEvent.click(tick);
+    expect(confirm).toBeEnabled();
   });
 
   it("explains why a copy can't replace the original", async () => {

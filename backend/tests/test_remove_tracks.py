@@ -398,6 +398,7 @@ def test_replace_the_original(app_client: TestClient, library: Path, tmp_path: P
     assert data["original"] == FILE and data["copy_file"] == COPY
     assert data["hardlinked"] is True
     assert data["keep_days"] == 30
+    assert data["loses_dolby_vision"] is False
     assert data["recycle_folder"].endswith(f"{FILM}/{RECYCLE_FOLDER}")
 
     unconfirmed = app_client.post(

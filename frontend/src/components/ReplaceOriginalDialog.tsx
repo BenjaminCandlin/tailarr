@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link2 } from "lucide-react";
+import { AlertTriangle, Link2 } from "lucide-react";
 import { useState } from "react";
 
 import { ConfirmSummary } from "@/components/ConfirmSummary";
@@ -17,7 +17,11 @@ export function spaceText(preview: ReplaceOriginalPreview): string {
   const saved = preview.original_size - preview.copy_size;
   const smaller =
     saved > 0
-      ? ` The copy is ${formatSize(saved)} smaller than the original, because of the tracks you left out.`
+      ? ` The copy is ${formatSize(saved)} smaller than the original, because ${
+          preview.loses_dolby_vision
+            ? "the Dolby Vision information is left out"
+            : "of the tracks you left out"
+        }.`
       : "";
   if (preview.hardlinked) {
     return (
@@ -61,6 +65,22 @@ function Summary({
           <p className="text-xs text-muted-foreground">{formatSize(preview.original_size)}</p>
         </div>
       </div>
+      {preview.loses_dolby_vision && (
+        <div
+          className="flex gap-2 rounded-lg border border-destructive/40 bg-destructive-soft p-3"
+          data-testid="loses-dolby-vision"
+        >
+          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden />
+          <div>
+            <p className="font-medium">Dolby Vision will be gone from this film</p>
+            <p>
+              This is an HDR10 copy, so after replacing, the film only has HDR10. TVs that play
+              Dolby Vision properly will no longer get it. Most people keep both versions side by
+              side instead: Plex lets each device play the one that suits it.
+            </p>
+          </div>
+        </div>
+      )}
       <p>
         The original isn't deleted straight away: it moves to a hidden recycle folder inside the
         film's folder and is deleted after{" "}
@@ -72,7 +92,7 @@ function Summary({
       </p>
       <p className="text-muted-foreground">
         Radarr and Plex keep finding the film under the same name. Plex may need a library refresh
-        to notice the new tracks.
+        to notice the change.
       </p>
       {preview.hardlinked && (
         <div className="flex gap-2 rounded-lg border border-warning/40 bg-warning-soft p-3">
@@ -91,7 +111,9 @@ function Summary({
           checked={understood}
           onCheckedChange={(checked) => onUnderstood(checked === true)}
         />
-        I understand my original file will be replaced by this copy
+        {preview.loses_dolby_vision
+          ? "I understand my original will be replaced and Dolby Vision will be gone"
+          : "I understand my original file will be replaced by this copy"}
       </label>
     </>
   );
