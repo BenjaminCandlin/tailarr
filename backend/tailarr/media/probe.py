@@ -138,6 +138,8 @@ class Track:
     frame_rate: str | None = None
     bit_depth: int | None = None
     hdr: HdrInfo | None = None
+    default_duration: int | None = None  # nanoseconds per frame, as stored in the file
+    display_dimensions: str | None = None  # e.g. "3840x1606"
     # Audio
     channels: int | None = None
     channel_layout: str | None = None
@@ -265,6 +267,8 @@ def describe(raw: dict[str, Any]) -> MediaDetails:
             item.resolution = resolution_label(width, height)
             item.frame_rate = _frame_rate(props, info)
             item.bit_depth = _int(info.get("BitDepth"))
+            item.default_duration = _int(props.get("default_duration"))
+            item.display_dimensions = props.get("display_dimensions") or None
             item.hdr = detect_hdr(info)
         elif kind == "audio":
             item.codec = audio_codec_name(

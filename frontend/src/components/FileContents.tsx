@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, FileWarning, Info, RefreshCw } from "lucide-react";
 
+import { DolbyVisionAction } from "@/components/DolbyVisionAction";
 import { TrackSettingsEditor } from "@/components/TrackSettingsEditor";
 import { TrackTable } from "@/components/TrackTable";
 import { Button } from "@/components/ui/button";
@@ -172,6 +173,14 @@ export function FileContents({
         </p>
       )}
       <HdrNote media={data} />
+      {edit && data.hdr?.formats.includes("Dolby Vision") && (
+        <DolbyVisionAction
+          filmId={edit.filmId}
+          file={edit.file}
+          hdr={data.hdr}
+          onOpenFile={edit.onOpenFile}
+        />
+      )}
       {edit ? (
         <TrackSettingsEditor
           filmId={edit.filmId}

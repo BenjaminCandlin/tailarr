@@ -128,6 +128,11 @@ class JobContext:
         self._queue._add_temp_path(self.job_id, str(path))
         return path
 
+    def discard(self, path: str | os.PathLike[str]) -> None:
+        """Delete a temporary working file as soon as it's no longer needed (frees space)."""
+        if Path(path).name.startswith(TEMP_PREFIX):
+            Path(path).unlink(missing_ok=True)
+
     def ensure_free_space(self, folder: str | os.PathLike[str], needed: int, **kw: int) -> None:
         try:
             check_free_space(folder, needed, **kw)
@@ -353,8 +358,9 @@ class JobQueue:
             fresh = session.get(Job, job.id)
             if fresh is None:
                 return
-            if outcome["status"] != JobStatus.DONE:
-                _remove_temp_files(fresh)
+            # Whatever happened, no temporary file is left behind. (A successful job has
+            # already renamed its finished file into place; leftovers are working files.)
+            _remove_temp_files(fresh)
             for key, value in outcome.items():
                 setattr(fresh, key, value)
             fresh.finished_at = _now()

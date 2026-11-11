@@ -248,6 +248,25 @@ export type ReplaceOriginalPreview = {
   recycle_folder: string;
 };
 
+export type Hdr10CopyPreview = {
+  film_id: number;
+  file: string;
+  new_file: string;
+  /** A Tailarr copy with the new name is already there. */
+  exists: boolean;
+  dv_profile: string;
+  /** UHD Blu-ray style profile 7: an extra picture layer that's left out too. */
+  blu_ray_layers: boolean;
+  /** What players show the copy as, e.g. ["HDR10"] or ["HDR10+", "HDR10"]. */
+  result: string[];
+  kept: string[];
+  chapters: number;
+  attachments: number;
+  uses_work_folder: boolean;
+  space: { label: string; needed: number; free: number; enough: boolean }[];
+  enough_space: boolean;
+};
+
 export type RecycleSettings = { keep_days: number; file_count: number; total_size: number };
 
 export class ApiError extends Error {
@@ -342,6 +361,16 @@ export const api = {
     request<Job>(`/api/films/${id}/replace-original`, {
       method: "POST",
       body: JSON.stringify({ copy_file: copyFile, confirmed: true, understood: true }),
+    }),
+  previewHdr10Copy: (id: number | string, file: string) =>
+    request<Hdr10CopyPreview>(`/api/films/${id}/hdr10-copy/preview`, {
+      method: "POST",
+      body: JSON.stringify({ file }),
+    }),
+  hdr10Copy: (id: number | string, file: string, overwrite: boolean) =>
+    request<Job>(`/api/films/${id}/hdr10-copy`, {
+      method: "POST",
+      body: JSON.stringify({ file, confirmed: true, overwrite }),
     }),
   recycleSettings: () => request<RecycleSettings>("/api/settings/recycle"),
   saveRecycleSettings: (keepDays: number) =>

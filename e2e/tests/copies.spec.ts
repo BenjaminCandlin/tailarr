@@ -73,6 +73,35 @@ test("unticked tracks are crossed out and the copy summary explains everything",
   await expect(dialog).toHaveCount(0);
 });
 
+test("Dolby Vision: an HDR10 copy is offered, and explained when it isn't possible", async ({
+  page,
+}) => {
+  const colour = await filmId(page, "Colour Test");
+  await page.goto(`/films/${colour}`);
+  const action = page.getByTestId("dv-action");
+  await expect(action).toContainText("show Dolby Vision with the wrong colours");
+  await action.getByRole("button", { name: "Make an HDR10 copy…" }).click();
+  const dialog = page.getByRole("dialog", { name: "Make a copy without Dolby Vision?" });
+  await expect(dialog.getByTestId("hdr10-new-file")).toHaveText(
+    "Colour Test (2023) WEBDL-2160p DV HDR10 - HDR10.mkv",
+  );
+  // The sample library already has an HDR10 copy: replacing it must be ticked first.
+  await expect(dialog).toContainText("An HDR10 copy is already there.");
+  await expect(dialog.getByRole("button", { name: "Make the HDR10 copy" })).toBeDisabled();
+  await expectNoSideways(page);
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+
+  const streaming = await filmId(page, "Streaming Only");
+  await page.goto(`/films/${streaming}`);
+  await expect(page.getByTestId("dv-not-possible")).toContainText("profile 5");
+  await expect(page.getByRole("button", { name: "Make an HDR10 copy…" })).toHaveCount(0);
+
+  const weekend = await filmId(page, "The Long Weekend");
+  await page.goto(`/films/${weekend}`);
+  await expect(page.getByTestId("hdr-note")).toBeVisible();
+  await expect(page.getByTestId("dv-action")).toHaveCount(0);
+});
+
 for (const theme of ["dark", "light"] as const) {
   test(`copy screenshots in ${theme} theme`, async ({ page }, testInfo) => {
     await setTheme(page, theme);
@@ -90,6 +119,16 @@ for (const theme of ["dark", "light"] as const) {
     await expectNoSideways(page);
     await page.screenshot({ path: `screenshots/${name}-copy-summary.png` });
     await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();
+
+    // Making a copy without Dolby Vision: the summary only.
+    await page.goto(`/films/${colour}`);
+    await page.getByRole("button", { name: "Make an HDR10 copy…" }).click();
+    await expect(page.getByRole("dialog")).toContainText("What happens");
+    await page.waitForTimeout(300);
+    await expectNoSideways(page);
+    await page.screenshot({ path: `screenshots/${name}-hdr10-summary.png` });
+    await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();
+    await page.screenshot({ path: `screenshots/${name}-hdr10-action.png`, fullPage: true });
 
     // Replacing the original: only the summary (cancelled), so the original stays.
     const multi = await filmId(page, MULTI);

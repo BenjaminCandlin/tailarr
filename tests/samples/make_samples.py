@@ -40,7 +40,7 @@ from pathlib import Path
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 
 # Bump when the samples change, so cached copies get rebuilt.
-SAMPLES_VERSION = "1"
+SAMPLES_VERSION = "2"
 
 HDR10_X265 = (
     "repeat-headers=1:hdr10=1:colorprim=bt2020:transfer=smpte2084:colormatrix=bt2020nc:"
@@ -70,7 +70,7 @@ class Subtitle:
 class Sample:
     name: str
     description: str
-    video: str  # "h264", "hevc-sdr", "hdr10", "hdr10plus", "dv8", "dv5", "dv7"
+    video: str  # "h264", "hevc-sdr", "hdr10", "hdr10plus", "dv8", "dv5", "dv7", "dv7dual"
     fps: str  # as a fraction, e.g. "24000/1001"
     seconds: float = 2.0
     audio: tuple[Audio, ...] = ()
@@ -80,6 +80,8 @@ class Sample:
     title: str = ""
     # What MediaInfo should report, used by tests.
     expect_hdr: tuple[str, ...] = field(default_factory=tuple)
+    # Frame durations in milliseconds, repeated, for a variable frame rate; empty = constant.
+    vfr_pattern: tuple[int, ...] = ()
 
 
 ENG = Audio("eng", "English", "aac", 2, default=True)
@@ -150,6 +152,26 @@ SAMPLES: tuple[Sample, ...] = (
         audio=(ENG,),
         expect_hdr=("Dolby Vision", "HDR10"),
     ),
+    Sample(
+        "dv_p7_dual",
+        "Dolby Vision profile 7 with a real enhancement layer (BL+EL+RPU in one track, "
+        "as MakeMKV makes from UHD Blu-rays)",
+        "dv7dual",
+        "24000/1001",
+        audio=(ENG, FRE_51),
+        subtitles=(Subtitle("eng", "English", default=True),),
+        chapters=2,
+        expect_hdr=("Dolby Vision", "HDR10"),
+    ),
+    Sample(
+        "dv_p8_vfr",
+        "Dolby Vision profile 8.1 with a variable frame rate",
+        "dv8",
+        "24000/1001",
+        audio=(ENG,),
+        expect_hdr=("Dolby Vision", "HDR10"),
+        vfr_pattern=(42, 42, 41, 50, 33),
+    ),
 )
 
 # The fake TRaSH-style library: (sample name, relative path inside data/).
@@ -159,7 +181,7 @@ LIBRARY: tuple[tuple[str, str], ...] = (
     ("dv_p8", "media/movies/Colour Test (2023)/Colour Test (2023) WEBDL-2160p DV HDR10.mkv"),
     ("dv_p5", "media/movies/Streaming Only (2024)/Streaming Only (2024) WEBDL-2160p DV.mkv"),
     ("sdr_2997", "media/movies/The Long Weekend (1999) {tmdb-10001}/The Long Weekend (1999) {tmdb-10001} Bluray-1080p.mkv"),
-    ("dv_p7", "media/movies/Blu-ray Night (2018) {imdb-tt0000001}/Blu-ray Night (2018) Remux-2160p.mkv"),
+    ("dv_p7_dual", "media/movies/Blu-ray Night (2018) {imdb-tt0000001}/Blu-ray Night (2018) Remux-2160p.mkv"),
     ("hdr10plus", "media/movies/Ärger im Paradies (2020)/Ärger im Paradies (2020) WEBDL-2160p.mkv"),
     # A folder named like a download (not renamed by Radarr).
     ("sdr_2997", "media/movies/The.Quiet.Hours.2017.1080p.BluRay.x264-GRP/the.quiet.hours.2017.1080p.bluray.x264-grp.mkv"),
@@ -328,6 +350,22 @@ def _video(sample: Sample, tmp: Path) -> tuple[Path, bool]:
     final = tmp / "video-final.hevc"
     if sample.video in ("hdr10", "hevc-sdr"):
         return hevc, True
+    if sample.video == "dv7dual":
+        # A small enhancement layer carrying the profile 7 metadata, woven into the
+        # base layer by dovi_tool, like a UHD Blu-ray remux.
+        el = tmp / "el.hevc"
+        _run(
+            [
+                "ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i",
+                f"testsrc2=s=160x90:r={sample.fps}:d={sample.seconds}",
+                "-pix_fmt", "yuv420p10le", "-c:v", "libx265", "-preset", "ultrafast",
+                "-x265-params", "log-level=error:repeat-headers=1", str(el),
+            ]
+        )  # fmt: skip
+        el_rpu = tmp / "el-rpu.hevc"
+        add_dolby_vision(el, FIXTURES / "fel_orig.bin", el_rpu)
+        _run(["dovi_tool", "mux", "--bl", str(hevc), "--el", str(el_rpu), "-o", str(final)])
+        return final, True
     if sample.video == "hdr10plus":
         add_hdr10plus(hevc, final)
     else:
@@ -426,7 +464,16 @@ def build_sample(sample: Sample, out: Path) -> Path:
         args = ["mkvmerge", "--quiet", "-o", str(out)]
         if sample.title:
             args += ["--title", sample.title]
-        if raw:
+        if raw and sample.vfr_pattern:
+            stamps = tmp / "timestamps.txt"
+            frames = round(sample.seconds * eval(sample.fps))  # noqa: S307 (our own constant)
+            times, now = [], 0
+            for i in range(frames):
+                times.append(str(now))
+                now += sample.vfr_pattern[i % len(sample.vfr_pattern)]
+            stamps.write_text("# timestamp format v2\n" + "\n".join(times) + "\n")
+            args += ["--timestamps", f"0:{stamps}"]
+        elif raw:
             args += ["--default-duration", f"0:{sample.fps}fps"]
         args += ["--language", "0:und", str(video)]
         for i, track in enumerate(sample.audio):
@@ -524,7 +571,7 @@ def main() -> int:
     if len(sys.argv) != 2:
         print(__doc__)
         return 2
-    for tool in ("ffmpeg", "mkvmerge"):
+    for tool in ("ffmpeg", "mkvmerge", "dovi_tool"):
         if shutil.which(tool) is None:
             print(f"Missing required program: {tool}")
             return 1

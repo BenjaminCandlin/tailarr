@@ -33,7 +33,7 @@ make_samples = _load_make_samples()
 
 @pytest.fixture(scope="session")
 def samples_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    for tool in ("ffmpeg", "mkvmerge"):
+    for tool in ("ffmpeg", "mkvmerge", "dovi_tool"):
         if shutil.which(tool) is None:
             pytest.fail(f"{tool} is needed to make the sample files")
     out = tmp_path_factory.mktemp("samples")

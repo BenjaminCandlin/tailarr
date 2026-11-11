@@ -34,6 +34,14 @@ NO_RECORD = (
     "Tailarr has no record of making this copy from this file, so it won't use it to "
     "replace the original."
 )
+# Only copies without some tracks can replace their original. An HDR10 copy has no Dolby
+# Vision, so replacing a Dolby Vision original with it would lose that for good.
+REPLACEABLE_KIND = "remove_tracks"
+NOT_REPLACEABLE = (
+    "Only copies made with \u201cSave a copy without the unticked tracks\u201d can replace "
+    "their original. An HDR10 copy is meant to sit next to the original, so Dolby Vision "
+    "TVs can still play the original."
+)
 ORIGINAL_CHANGED = (
     "The original file has changed since this copy was made (perhaps Radarr upgraded it), "
     "so the copy may be out of date. Nothing was changed. Make a new copy from the current "
@@ -52,6 +60,8 @@ def check_copy_record(engine: Engine, original: str, copy: str) -> CopyRecord:
         record = session.get(CopyRecord, copy)
     if record is None or record.source_path != original:
         raise JobFailed(NO_RECORD)
+    if record.kind != REPLACEABLE_KIND:
+        raise JobFailed(NOT_REPLACEABLE)
     stat = os.stat(original)
     if (stat.st_size, stat.st_mtime) != (record.source_size, record.source_mtime):
         raise JobFailed(ORIGINAL_CHANGED)
