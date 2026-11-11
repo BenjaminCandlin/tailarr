@@ -11,6 +11,28 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { api, type Job, type ReplaceOriginalPreview } from "@/lib/api";
 import { formatSize } from "@/lib/format";
 
+/** What happens to disk space, in plain words. */
+export function spaceText(preview: ReplaceOriginalPreview): string {
+  const together = formatSize(preview.original_size + preview.copy_size);
+  const saved = preview.original_size - preview.copy_size;
+  const smaller =
+    saved > 0
+      ? ` The copy is ${formatSize(saved)} smaller than the original, because of the tracks you left out.`
+      : "";
+  if (preview.hardlinked) {
+    return (
+      `Right now the original and the copy take up ${together} together. Because the original ` +
+      `is still seeding, its ${formatSize(preview.original_size)} is only freed once the recycle ` +
+      `folder is emptied and the torrent is removed.${smaller}`
+    );
+  }
+  return (
+    `Right now the original and the copy take up ${together} together. When the recycle ` +
+    `folder is emptied, the original's ${formatSize(preview.original_size)} is freed, leaving ` +
+    `just the copy.${smaller}`
+  );
+}
+
 function Summary({
   preview,
   understood,
@@ -20,7 +42,6 @@ function Summary({
   understood: boolean;
   onUnderstood: (value: boolean) => void;
 }) {
-  const saved = preview.original_size - preview.copy_size;
   return (
     <>
       <div className="flex flex-col gap-2">
@@ -46,11 +67,9 @@ function Summary({
         <span className="font-medium">{preview.keep_days} days</span>. Until then you can get it
         back by moving it out of <span className="break-all">{preview.recycle_folder}</span>.
       </p>
-      {!preview.hardlinked && saved > 0 && (
-        <p className="text-muted-foreground">
-          Once the recycle folder is emptied, this frees {formatSize(saved)}.
-        </p>
-      )}
+      <p className="text-muted-foreground" data-testid="replace-space">
+        {spaceText(preview)}
+      </p>
       <p className="text-muted-foreground">
         Radarr and Plex keep finding the film under the same name. Plex may need a library refresh
         to notice the new tracks.
