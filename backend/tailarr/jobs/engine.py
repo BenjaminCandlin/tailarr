@@ -28,7 +28,7 @@ from sqlmodel import Session, col, select
 
 from ..core.disk import NotEnoughSpaceError, check_free_space
 from ..media.tools import ToolCancelled, ToolError, ToolResult, run_tool_live
-from .models import ACTIVE, Job, JobStatus
+from .models import ACTIVE, Job, JobGroup, JobStatus
 
 log = logging.getLogger(__name__)
 
@@ -175,6 +175,7 @@ class JobQueue:
         path: str,
         params: dict[str, Any],
         film_id: int | None = None,
+        episode_id: int | None = None,
         group_id: str | None = None,
     ) -> Job:
         if kind not in self._types:
@@ -185,6 +186,7 @@ class JobQueue:
             subject=subject,
             path=path,
             film_id=film_id,
+            episode_id=episode_id,
             group_id=group_id,
             params=json.dumps(params),
             created_at=_now(),
@@ -227,8 +229,31 @@ class JobQueue:
             jobs = session.exec(select(Job).where(col(Job.status).not_in(list(ACTIVE)))).all()
             for job in jobs:
                 session.delete(job)
+            session.flush()
+            # Groups with no jobs left in the list are forgotten too.
+            in_use = set(
+                session.exec(select(Job.group_id).where(col(Job.group_id).is_not(None))).all()
+            )
+            for group in session.exec(select(JobGroup)).all():
+                if group.id not in in_use:
+                    session.delete(group)
             session.commit()
             return len(jobs)
+
+    def cancel_group(self, group_id: str) -> int:
+        """Cancel every waiting job of a group, and ask its running job to stop."""
+        with Session(self._engine) as session:
+            ids = session.exec(
+                select(Job.id).where(Job.group_id == group_id, col(Job.status).in_(list(ACTIVE)))
+            ).all()
+        count = 0
+        for job_id in ids:
+            job = self.get(job_id)  # type: ignore[arg-type]
+            if job is None or (job.status == JobStatus.RUNNING and not job.cancellable):
+                continue  # a step that mustn't be interrupted: it finishes in a moment
+            if self.cancel(job_id) is not None:  # type: ignore[arg-type]
+                count += 1
+        return count
 
     # -- worker ------------------------------------------------------------------
     def start(self) -> None:

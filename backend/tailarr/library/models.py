@@ -70,3 +70,66 @@ class MediaRecord(SQLModel, table=True):
     hdr: str = ""  # comma-separated: "Dolby Vision,HDR10"
     dv_profile: str | None = None  # "8.1", "7", "5"
     resolution: str | None = None  # "4K", "1080p", ...
+
+
+# -- TV ------------------------------------------------------------------------------------
+
+# Bump when Show/Episode/EpisodeFile columns change (the tables are then emptied and refilled).
+TV_CACHE_VERSION = 1
+
+
+class Show(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    folder: str = Field(index=True, unique=True)  # full path of the show's folder
+    folder_name: str
+    title: str
+    sort_title: str
+    year: int | None = None
+    tvdb_id: int | None = None
+    tmdb_id: int | None = None
+    imdb_id: str | None = None
+    poster_path: str | None = None
+    poster_mtime: float | None = None
+    backdrop_path: str | None = None
+    backdrop_mtime: float | None = None
+    size: int = 0  # all video files of all episodes
+    added_at: float = 0  # newest episode file's modified time
+    season_count: int = 0
+    episode_count: int = 0
+
+
+class Episode(SQLModel, table=True):
+    """One episode: its own video file plus any copies Tailarr made of it.
+
+    Kept with the same id across re-scans (matched by `key`), so an episode's page
+    keeps working after Tailarr adds a copy next to it.
+    """
+
+    id: int | None = Field(default=None, primary_key=True)
+    show_id: int = Field(index=True, foreign_key="show.id")
+    key: str = Field(index=True)  # folder + file name without extension or copy suffix
+    folder: str  # the folder holding the episode's files (usually "Season 01")
+    season: int | None = None  # 0 = specials; None = not known
+    episode: int | None = None  # first episode number in the file
+    episode_end: int | None = None  # last number for double episodes ("S01E01-E02")
+    title: str = ""
+    main_file: str | None = None
+    size: int = 0
+    added_at: float = 0
+    file_count: int = 0
+
+
+class EpisodeFile(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    episode_id: int = Field(index=True, foreign_key="episode.id")
+    show_id: int = Field(index=True)
+    name: str
+    path: str
+    size: int
+    mtime: float
+    is_mkv: bool
+    is_copy: bool
+    links: int = 1
+
+
+TV_TABLES = (EpisodeFile, Episode, Show)

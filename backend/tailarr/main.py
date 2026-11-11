@@ -13,16 +13,18 @@ from fastapi.staticfiles import StaticFiles
 from sqlmodel import Session, select
 
 from . import __version__
-from .api import copies, films, health, jobs, settings
+from .api import actions, films, health, jobs, settings, tv
 from .core.config import AppConfig
 from .core.db import make_engine
+from .core.paths import is_inside
 from .core.settings_store import get_library_settings
 from .jobs import hdr10_copy, remove_tracks, replace_original, track_settings
 from .jobs.engine import JobQueue
 from .jobs.recycle import RecycleCleaner
 from .library.media_reader import MediaReader
-from .library.models import FilmFile
+from .library.models import EpisodeFile, FilmFile
 from .library.scanner import FilmScanner, rescan_film_folder
+from .library.tv_scanner import TvScanner, rescan_show_folder
 
 log = logging.getLogger(__name__)
 
@@ -31,7 +33,9 @@ log = logging.getLogger(__name__)
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Bring the film list up to date in the background as soon as Tailarr starts.
     # (After the scan, the media reader reads the details of new or changed files.)
-    if not app.state.film_scanner.start_if_stale():
+    films_started = app.state.film_scanner.start_if_stale()
+    tv_started = app.state.tv_scanner.start_if_stale()
+    if not (films_started or tv_started):
         app.state.media_reader.start()
     app.state.job_queue.start()
     app.state.recycle_cleaner.start()
@@ -57,13 +61,18 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         with Session(engine) as session:
             return Path(get_library_settings(session, config).movies_dir)
 
-    app.state.media_reader = MediaReader(engine, films_root)
-    app.state.film_scanner = FilmScanner(engine, films_root, app.state.media_reader.start)
+    def tv_root() -> Path:
+        with Session(engine) as session:
+            return Path(get_library_settings(session, config).tv_dir)
 
     def library_roots() -> list[str]:
         with Session(engine) as session:
             library = get_library_settings(session, config)
             return [library.movies_dir, library.tv_dir]
+
+    app.state.media_reader = MediaReader(engine, lambda: [Path(p) for p in library_roots()])
+    app.state.film_scanner = FilmScanner(engine, films_root, app.state.media_reader.start)
+    app.state.tv_scanner = TvScanner(engine, tv_root, app.state.media_reader.start)
 
     def file_changed(path: str) -> None:
         try:
@@ -72,13 +81,28 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
             log.exception("Couldn't re-read %s after changing it", path)
 
     def folder_changed(folder: str) -> None:
-        """A job added, replaced or removed files in a film's folder: show it straight away."""
+        """A job added, replaced or removed files in a folder: show it straight away."""
         try:
             with Session(engine) as session:
-                film = rescan_film_folder(session, folder, films_root())
-                if film is None:
-                    return
-                files = session.exec(select(FilmFile).where(FilmFile.film_id == film.id)).all()
+                if is_inside(folder, tv_root()):
+                    show = rescan_show_folder(session, folder, tv_root())
+                    if show is None:
+                        return
+                    files: list[FilmFile | EpisodeFile] = list(
+                        session.exec(
+                            select(EpisodeFile).where(
+                                EpisodeFile.show_id == show.id,
+                                EpisodeFile.path.startswith(folder),  # type: ignore[union-attr]
+                            )
+                        ).all()
+                    )
+                else:
+                    film = rescan_film_folder(session, folder, films_root())
+                    if film is None:
+                        return
+                    files = list(
+                        session.exec(select(FilmFile).where(FilmFile.film_id == film.id)).all()
+                    )
                 for file in files:
                     app.state.media_reader.get(session, file.path)  # reads new/changed files
         except Exception:  # the job's own result matters more than refreshing the page
@@ -100,7 +124,11 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     app.include_router(health.router)
     app.include_router(settings.router)
     app.include_router(films.router)
-    app.include_router(copies.router)
+    app.include_router(actions.make_router("/api/films", films.load_film))
+    app.include_router(tv.router)
+    app.include_router(tv.episodes_router)
+    app.include_router(actions.make_router("/api/episodes", tv.load_episode))
+    app.include_router(tv.languages_router)
     app.include_router(jobs.router)
 
     _mount_frontend(app, config.static_dir)

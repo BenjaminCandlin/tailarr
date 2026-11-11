@@ -336,9 +336,9 @@ def test_a_copy_that_fails_its_check_is_thrown_away(
 
 
 def test_not_enough_space(app_client: TestClient, monkeypatch) -> None:
-    from tailarr.api import copies
+    from tailarr.api import actions
 
-    monkeypatch.setattr(copies, "free_space", lambda path: 1000)
+    monkeypatch.setattr(actions, "free_space", lambda path: 1000)
     film_id = _film_id(app_client)
     preview = app_client.post(
         f"/api/films/{film_id}/remove-tracks/preview", json=_remove_body(app_client, film_id)

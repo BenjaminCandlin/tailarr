@@ -227,7 +227,7 @@ def test_only_mkv_files_in_the_film(app_client: TestClient) -> None:
     body = {"file": detail["main_file"], "changes": [{"uid": "1", "default": True}]}
     response = app_client.post(f"/api/films/{film_id}/track-settings/preview", json=body)
     assert response.status_code == 400
-    assert "only change track settings in MKV" in response.json()["detail"]
+    assert "only change MKV files" in response.json()["detail"]
     other = {"file": "../../../etc/passwd", "changes": [{"uid": "1", "default": True}]}
     response = app_client.post(f"/api/films/{film_id}/track-settings/preview", json=other)
     assert response.status_code == 404

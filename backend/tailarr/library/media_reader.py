@@ -20,11 +20,11 @@ from pathlib import Path
 from sqlalchemy import Engine
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import defer
-from sqlmodel import Session, col, select
+from sqlmodel import Session, select
 
 from ..core.paths import is_inside
 from ..media.probe import MediaDetails, ReadError, describe, read_file
-from .models import Film, FilmFile, MediaRecord
+from .models import Episode, EpisodeFile, Film, FilmFile, MediaRecord, Show
 
 log = logging.getLogger(__name__)
 
@@ -82,9 +82,9 @@ class ReaderStatus:
 class MediaReader:
     """Reads files in the background, one at a time, and on request for a single file."""
 
-    def __init__(self, engine: Engine, films_root: Callable[[], Path]) -> None:
+    def __init__(self, engine: Engine, library_roots: Callable[[], list[Path]]) -> None:
         self._engine = engine
-        self._films_root = films_root
+        self._library_roots = library_roots
         self._lock = threading.Lock()
         self._thread: threading.Thread | None = None
         self._running = False
@@ -125,6 +125,24 @@ class MediaReader:
                     ).all()
                     film.size = sum(f.size for f in siblings)
                     session.add(film)
+            for row in session.exec(select(EpisodeFile).where(EpisodeFile.path == path)).all():
+                row.size, row.mtime, row.links = stat.st_size, stat.st_mtime, stat.st_nlink
+                session.add(row)
+                session.flush()
+                episode = session.get(Episode, row.episode_id)
+                if episode is not None:
+                    siblings = session.exec(
+                        select(EpisodeFile).where(EpisodeFile.episode_id == row.episode_id)
+                    ).all()
+                    episode.size = sum(f.size for f in siblings)
+                    session.add(episode)
+                show = session.get(Show, row.show_id)
+                if show is not None:
+                    everything = session.exec(
+                        select(EpisodeFile.size).where(EpisodeFile.show_id == row.show_id)
+                    ).all()
+                    show.size = sum(everything)
+                    session.add(show)
             session.commit()
             read_and_store(session, path, stat.st_size, stat.st_mtime)
 
@@ -186,7 +204,11 @@ class MediaReader:
         query = select(MediaRecord).options(defer(MediaRecord.raw))  # type: ignore[arg-type]
         records = {r.path: r for r in session.exec(query).all()}
         todo = []
-        rows = session.exec(select(FilmFile).order_by(col(FilmFile.mtime).desc())).all()
+        rows: list[FilmFile | EpisodeFile] = [
+            *session.exec(select(FilmFile)).all(),
+            *session.exec(select(EpisodeFile)).all(),
+        ]
+        rows.sort(key=lambda f: f.mtime, reverse=True)  # newest first, films and TV together
         for f in rows:
             record = records.get(f.path)
             if not is_current(record, f.size, f.mtime):
@@ -218,12 +240,12 @@ class MediaReader:
         log.info("Read details of %s files", len(todo))
 
     def _clean_up(self, session: Session) -> None:
-        """Forget files in the Films folder that the library no longer has."""
-        root = self._films_root()
-        known = set(session.exec(select(FilmFile.path)).all())
-        if not known:
-            return  # e.g. the array is stopped: keep everything for when it's back
-        for record in session.exec(select(MediaRecord)).all():
-            if record.path not in known and is_inside(record.path, root):
-                session.delete(record)
+        """Forget files in the Films/TV folders that the library no longer has."""
+        for root, table in zip(self._library_roots(), (FilmFile, EpisodeFile), strict=False):
+            known = set(session.exec(select(table.path)).all())
+            if not known:
+                continue  # e.g. the array is stopped: keep everything for when it's back
+            for record in session.exec(select(MediaRecord)).all():
+                if record.path not in known and is_inside(record.path, root):
+                    session.delete(record)
         session.commit()

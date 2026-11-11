@@ -29,6 +29,7 @@ class Job(SQLModel, table=True):
     title: str  # what it does, e.g. "Change track settings"
     subject: str  # what it's done to, e.g. "Blade Runner (1982)"
     film_id: int | None = None
+    episode_id: int | None = None  # added after version 2 (new columns are added in place)
     path: str  # the file the job works on
     group_id: str | None = Field(default=None, index=True)  # jobs started together (TV, rules)
     status: str = Field(default=JobStatus.QUEUED, index=True)
@@ -75,3 +76,11 @@ class RecycledFile(SQLModel, table=True):
     size: int
     recycled_at: float
     job_id: int | None = None
+
+
+class JobGroup(SQLModel, table=True):
+    """Jobs started together (a whole season or show, or a rule), shown as one group."""
+
+    id: str = Field(primary_key=True)
+    title: str  # e.g. "Make HDR10 copies: Test Show, Season 1"
+    created_at: float
