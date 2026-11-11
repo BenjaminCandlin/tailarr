@@ -3,11 +3,45 @@ import { AlertTriangle, ListOrdered, Trash2 } from "lucide-react";
 
 import { EmptyState } from "@/components/EmptyState";
 import { JobCard } from "@/components/JobCard";
+import { JobGroupCard } from "@/components/JobGroupCard";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { api } from "@/lib/api";
+import { api, type Job, type JobGroup } from "@/lib/api";
 import { FAST_POLL, SLOW_POLL, isActive } from "@/lib/jobs";
+
+type Entry = { job: Job } | { group: JobGroup; jobs: Job[] };
+
+/** Jobs in order, with jobs of the same group (a season, a show, a rule) kept together. */
+function entries(jobs: Job[], groups: JobGroup[]): Entry[] {
+  const byId = new Map(groups.map((g) => [g.id, g]));
+  const out: Entry[] = [];
+  const seen = new Map<string, { group: JobGroup; jobs: Job[] }>();
+  for (const job of jobs) {
+    const group = job.group_id ? byId.get(job.group_id) : undefined;
+    if (!group) {
+      out.push({ job });
+      continue;
+    }
+    let entry = seen.get(group.id);
+    if (!entry) {
+      entry = { group, jobs: [] };
+      seen.set(group.id, entry);
+      out.push(entry);
+    }
+    entry.jobs.push(job);
+  }
+  return out;
+}
+
+function isRunning(entry: Entry): boolean {
+  return "job" in entry ? isActive(entry.job) : entry.jobs.some(isActive);
+}
+
+function EntryCard({ entry }: { entry: Entry }) {
+  if ("job" in entry) return <JobCard job={entry.job} />;
+  return <JobGroupCard group={entry.group} jobs={entry.jobs} />;
+}
 
 const DESCRIPTION = "Jobs that are waiting, running or finished. One job runs at a time.";
 
@@ -52,8 +86,9 @@ export function QueuePage() {
     );
   }
 
-  const active = jobs.data.jobs.filter(isActive);
-  const finished = jobs.data.jobs.filter((job) => !isActive(job));
+  const all = entries(jobs.data.jobs, jobs.data.groups ?? []);
+  const active = all.filter(isRunning);
+  const finished = all.filter((entry) => !isRunning(entry));
 
   return (
     <>
@@ -76,8 +111,8 @@ export function QueuePage() {
               <p className="text-sm text-muted-foreground">Nothing is running right now.</p>
             ) : (
               <ul className="flex flex-col gap-3">
-                {active.map((job) => (
-                  <JobCard key={job.id} job={job} />
+                {active.map((entry) => (
+                  <EntryCard key={"job" in entry ? entry.job.id : entry.group.id} entry={entry} />
                 ))}
               </ul>
             )}
@@ -103,8 +138,8 @@ export function QueuePage() {
                 Clearing only tidies this list. It doesn't change or delete any files.
               </p>
               <ul className="flex flex-col gap-3">
-                {finished.map((job) => (
-                  <JobCard key={job.id} job={job} />
+                {finished.map((entry) => (
+                  <EntryCard key={"job" in entry ? entry.job.id : entry.group.id} entry={entry} />
                 ))}
               </ul>
             </section>

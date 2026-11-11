@@ -42,8 +42,8 @@ export function fold(text: string): string {
   return text.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase();
 }
 
-export function plural(count: number, word: string): string {
-  return `${count.toLocaleString()} ${word}${count === 1 ? "" : "s"}`;
+export function plural(count: number, word: string, many = `${word}s`): string {
+  return `${count.toLocaleString()} ${count === 1 ? word : many}`;
 }
 
 /** 8040 -> "2 h 14 min"; 2700 -> "45 min"; 3 -> "3 seconds". */
