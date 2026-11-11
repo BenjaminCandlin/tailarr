@@ -1,14 +1,16 @@
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Clapperboard, FileVideo, Link2, ListVideo } from "lucide-react";
-import { Link, useParams } from "react-router";
+import { ArrowLeft, Clapperboard, FileVideo, Link2 } from "lucide-react";
+import { Link, useParams, useSearchParams } from "react-router";
 
 import { EmptyState } from "@/components/EmptyState";
+import { FileContents } from "@/components/FileContents";
+import { MediaBadges } from "@/components/MediaBadges";
 import { Poster } from "@/components/Poster";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { api, type FilmDetail, type FilmFile } from "@/lib/api";
+import { api, type FilmDetail as FilmDetailData, type FilmFile } from "@/lib/api";
 import { formatDate, formatSize, plural } from "@/lib/format";
 
 function BackLink() {
@@ -36,6 +38,7 @@ function FileRow({ file }: { file: FilmFile }) {
       </div>
       <div className="flex flex-wrap gap-1.5 pl-8">
         {file.is_main && <Badge tone="accent">Main file</Badge>}
+        <MediaBadges media={file.media} />
         {file.is_copy && <Badge>Copy made by Tailarr</Badge>}
         {!file.is_mkv && <Badge tone="warning">Not an MKV file</Badge>}
         {file.hardlinked && (
@@ -61,7 +64,7 @@ function FileRow({ file }: { file: FilmFile }) {
   );
 }
 
-function Header({ film }: { film: FilmDetail }) {
+function Header({ film }: { film: FilmDetailData }) {
   return (
     <div className="relative mb-6 overflow-hidden rounded-xl border bg-card">
       {film.backdrop_url && (
@@ -89,6 +92,7 @@ function Header({ film }: { film: FilmDetail }) {
             {plural(film.file_count, "file")} · {formatSize(film.size)} · Added{" "}
             {formatDate(film.added_at)}
           </p>
+          <MediaBadges media={film.media} />
           <p className="text-xs break-all text-muted-foreground">{film.folder}</p>
         </div>
       </div>
@@ -120,12 +124,69 @@ export function FilmDetailPage() {
     );
   }
 
-  const data = film.data;
+  return <FilmDetail film={film.data} />;
+}
+
+function fileLabel(file: FilmFile): string {
+  if (file.is_main) return `Main file: ${file.name}`;
+  if (file.is_copy) return `Copy: ${file.name}`;
+  return file.name;
+}
+
+function FilmDetail({ film }: { film: FilmDetailData }) {
+  const [params, setParams] = useSearchParams();
+  const wanted = params.get("file");
+  const selected =
+    film.files.find((f) => f.name === wanted) ?? film.files.find((f) => f.is_main) ?? film.files[0];
+
+  function choose(name: string) {
+    const next = new URLSearchParams(params);
+    if (name === film.main_file) next.delete("file");
+    else next.set("file", name);
+    setParams(next, { replace: true });
+  }
+
   return (
     <>
       <BackLink />
-      <Header film={data} />
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+      <Header film={film} />
+      <div className="flex flex-col gap-6">
+        {selected && (
+          <Card>
+            <CardHeader>
+              <CardTitle>What's inside</CardTitle>
+              <CardDescription>
+                The picture, sound and subtitle tracks, read with MKVToolNix and MediaInfo.
+              </CardDescription>
+              {film.files.length > 1 && (
+                <div className="mt-2 flex flex-col gap-1.5">
+                  <label htmlFor="file-choice" className="text-sm font-medium">
+                    File
+                  </label>
+                  <select
+                    id="file-choice"
+                    value={selected.name}
+                    onChange={(e) => choose(e.target.value)}
+                    className="h-11 w-full max-w-full min-w-0 cursor-pointer truncate rounded-lg border border-input bg-background px-3 text-base md:h-10 md:text-sm"
+                  >
+                    {film.files.map((file) => (
+                      <option key={file.name} value={file.name}>
+                        {fileLabel(file)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </CardHeader>
+            <CardContent>
+              <FileContents
+                key={selected.name}
+                queryKey={["films", String(film.id), "media", selected.name]}
+                load={(refresh) => api.filmMedia(film.id, selected.name, refresh)}
+              />
+            </CardContent>
+          </Card>
+        )}
         <Card>
           <CardHeader>
             <CardTitle>Files</CardTitle>
@@ -133,23 +194,11 @@ export function FilmDetailPage() {
           </CardHeader>
           <CardContent>
             <ul className="divide-y">
-              {data.files.map((file) => (
+              {film.files.map((file) => (
                 <FileRow key={file.name} file={file} />
               ))}
             </ul>
           </CardContent>
-        </Card>
-        <Card className="self-start">
-          <CardHeader>
-            <div className="mb-1 flex size-10 items-center justify-center rounded-full bg-accent text-accent-foreground">
-              <ListVideo className="size-5" aria-hidden />
-            </div>
-            <CardTitle>Tracks and HDR coming next</CardTitle>
-            <CardDescription>
-              The next update shows each file's video, audio and subtitle tracks, and whether it has
-              Dolby Vision, HDR10 or HDR10+.
-            </CardDescription>
-          </CardHeader>
         </Card>
       </div>
     </>

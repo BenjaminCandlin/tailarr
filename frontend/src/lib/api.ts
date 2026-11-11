@@ -44,6 +44,19 @@ export type ScanStatus = {
   error: string | null;
 };
 
+/** Headline facts about one file, for badges and filters. */
+export type MediaSummary = {
+  /** False: Tailarr hasn't read this file's details yet. */
+  read: boolean;
+  error: boolean;
+  /** "Dolby Vision", "HDR10+", "HDR10", "HLG". Empty means a normal (SDR) picture. */
+  hdr: string[];
+  dv_profile: string | null;
+  resolution: string | null;
+};
+
+export type ReadingStatus = { running: boolean; done: number; total: number };
+
 export type Film = {
   id: number;
   title: string;
@@ -55,9 +68,15 @@ export type Film = {
   file_count: number;
   main_file: string | null;
   is_mkv: boolean;
+  media: MediaSummary;
 };
 
-export type FilmList = { root: string; films: Film[]; scan: ScanStatus };
+export type FilmList = {
+  root: string;
+  films: Film[];
+  scan: ScanStatus;
+  reading: ReadingStatus;
+};
 
 export type FilmFile = {
   name: string;
@@ -67,6 +86,7 @@ export type FilmFile = {
   is_copy: boolean;
   is_main: boolean;
   hardlinked: boolean;
+  media: MediaSummary;
 };
 
 export type FilmDetail = Film & {
@@ -75,6 +95,63 @@ export type FilmDetail = Film & {
   tmdb_id: number | null;
   imdb_id: string | null;
   files: FilmFile[];
+};
+
+export type Hdr = {
+  formats: string[];
+  dv_profile: string | null;
+  /** What players without Dolby Vision show: "HDR10", "SDR", "HLG", or null (wrong colours). */
+  dv_fallback: string | null;
+  dv_dual_layer: boolean;
+  can_remove_dv: boolean;
+};
+
+export type TrackType = "video" | "audio" | "subtitles";
+
+export type Track = {
+  id: number;
+  type: TrackType;
+  codec: string;
+  codec_id: string;
+  language: string;
+  language_name: string;
+  name: string;
+  default: boolean;
+  forced: boolean;
+  enabled: boolean;
+  hearing_impaired: boolean;
+  visual_impaired: boolean;
+  commentary: boolean;
+  original: boolean;
+  width: number | null;
+  height: number | null;
+  resolution: string | null;
+  frame_rate: string | null;
+  bit_depth: number | null;
+  hdr: Hdr | null;
+  channels: number | null;
+  channel_layout: string | null;
+  sample_rate: number | null;
+  picture_based: boolean | null;
+};
+
+export type Attachment = { name: string; mime_type: string; size: number };
+
+export type Media = {
+  file: string;
+  size: number;
+  read_at: string;
+  error: string | null;
+  error_details: string | null;
+  container: string | null;
+  title: string | null;
+  duration: number | null;
+  resolution: string | null;
+  hdr: Hdr | null;
+  hdr_checked: boolean;
+  tracks: Track[];
+  chapters: number;
+  attachments: Attachment[];
 };
 
 export class ApiError extends Error {
@@ -129,5 +206,9 @@ export const api = {
     }),
   films: () => request<FilmList>("/api/films"),
   film: (id: number | string) => request<FilmDetail>(`/api/films/${id}`),
+  filmMedia: (id: number | string, file: string, refresh = false) =>
+    request<Media>(
+      `/api/films/${id}/media?${new URLSearchParams({ file, ...(refresh ? { refresh: "true" } : {}) })}`,
+    ),
   rescanFilms: () => request<ScanStatus>("/api/films/scan", { method: "POST" }),
 };

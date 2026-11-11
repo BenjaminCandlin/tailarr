@@ -13,6 +13,7 @@ import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 
 import { EmptyState } from "@/components/EmptyState";
+import { MediaBadges } from "@/components/MediaBadges";
 import { PageHeader } from "@/components/PageHeader";
 import { Poster } from "@/components/Poster";
 import { PosterPlaceholderGrid } from "@/components/PosterPlaceholderGrid";
@@ -21,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api, type Film, type FilmList } from "@/lib/api";
 import { fold, formatDate, formatSize, plural, timeAgo } from "@/lib/format";
+import { DV } from "@/lib/hdr";
 import { cn } from "@/lib/utils";
 
 type SortKey = "title" | "added" | "size";
@@ -30,6 +32,21 @@ const SORTS: { key: SortKey; label: string }[] = [
   { key: "title", label: "Title (A–Z)" },
   { key: "added", label: "Recently added" },
   { key: "size", label: "Largest first" },
+];
+
+type FilterKey = "all" | "dv" | "hdr10plus" | "hdr" | "sdr" | "4k";
+
+const FILTERS: { key: FilterKey; label: string; test: (film: Film) => boolean }[] = [
+  { key: "all", label: "All films", test: () => true },
+  { key: "dv", label: "Has Dolby Vision", test: (f) => f.media.hdr.includes(DV) },
+  { key: "hdr10plus", label: "Has HDR10+", test: (f) => f.media.hdr.includes("HDR10+") },
+  { key: "hdr", label: "Any HDR", test: (f) => f.media.hdr.length > 0 },
+  {
+    key: "sdr",
+    label: "No HDR",
+    test: (f) => f.media.read && !f.media.error && f.media.hdr.length === 0,
+  },
+  { key: "4k", label: "4K", test: (f) => f.media.resolution === "4K" },
 ];
 
 const VIEW_KEY = "tailarr-films-view";
@@ -73,10 +90,14 @@ function filmMeta(film: Film): string {
   return [film.year, formatSize(film.size)].filter(Boolean).join(" · ");
 }
 
-function FilmBadges({ film }: { film: Film }) {
+function NotMkv({ film, overlay = false }: { film: Film; overlay?: boolean }) {
   if (film.is_mkv) return null;
   return (
-    <Badge tone="warning" title="Tailarr can only change MKV files">
+    <Badge
+      tone="warning"
+      title="Tailarr can only change MKV files"
+      className={cn(overlay && "shadow-sm ring-1 ring-black/10")}
+    >
       Not MKV
     </Badge>
   );
@@ -97,8 +118,9 @@ function FilmGrid({ films }: { films: Film[] }) {
                 title={film.title}
                 className="transition group-hover:border-primary group-hover:shadow-lg"
               />
-              <div className="absolute top-2 left-2 flex flex-wrap gap-1">
-                <FilmBadges film={film} />
+              <div className="absolute top-2 right-2 left-2 flex flex-wrap gap-1">
+                <NotMkv film={film} overlay />
+                <MediaBadges media={film.media} overlay />
               </div>
             </div>
             <p className="mt-2 line-clamp-2 text-sm leading-snug font-medium [overflow-wrap:anywhere] group-hover:text-primary">
@@ -128,8 +150,15 @@ function FilmRows({ films }: { films: Film[] }) {
                 {film.year ?? "Year unknown"}
                 <span className="hidden sm:inline"> · Added {formatDate(film.added_at)}</span>
               </p>
+              <span className="mt-1 flex gap-1 sm:hidden">
+                <NotMkv film={film} />
+                <MediaBadges media={film.media} />
+              </span>
             </div>
-            <FilmBadges film={film} />
+            <span className="hidden sm:flex sm:gap-1">
+              <NotMkv film={film} />
+              <MediaBadges media={film.media} />
+            </span>
             <span className="w-20 shrink-0 text-right text-sm text-muted-foreground tabular-nums">
               {formatSize(film.size)}
             </span>
@@ -145,6 +174,8 @@ function Toolbar({
   onQuery,
   sort,
   onSort,
+  filter,
+  onFilter,
   view,
   onView,
 }: {
@@ -152,6 +183,8 @@ function Toolbar({
   onQuery: (q: string) => void;
   sort: SortKey;
   onSort: (s: SortKey) => void;
+  filter: FilterKey;
+  onFilter: (f: FilterKey) => void;
   view: View;
   onView: (v: View) => void;
 }) {
@@ -171,7 +204,25 @@ function Toolbar({
           className="pl-9"
         />
       </div>
-      <div className="flex flex-1 items-center gap-3 sm:flex-none">
+      <div className="flex flex-[1_1_100%] flex-wrap items-center gap-3 sm:flex-none">
+        <label className="sr-only" htmlFor="film-filter">
+          Show
+        </label>
+        <select
+          id="film-filter"
+          value={filter}
+          onChange={(e) => onFilter(e.target.value as FilterKey)}
+          className={cn(
+            "h-11 min-w-0 flex-1 cursor-pointer rounded-lg border border-input bg-background px-3 text-base md:h-10 md:text-sm",
+            filter !== "all" && "border-primary text-primary",
+          )}
+        >
+          {FILTERS.map((f) => (
+            <option key={f.key} value={f.key}>
+              {f.label}
+            </option>
+          ))}
+        </select>
         <label className="sr-only" htmlFor="film-sort">
           Sort films
         </label>
@@ -222,8 +273,15 @@ function Toolbar({
 }
 
 function ScanLine({ data }: { data: FilmList }) {
-  const { scan } = data;
+  const { scan, reading } = data;
   if (scan.running || !scan.finished_at) return null; // the button says "Checking…"
+  if (reading.running && reading.total > 0) {
+    return (
+      <p className="text-sm text-muted-foreground" role="status">
+        Reading film details… {reading.done.toLocaleString()} of {reading.total.toLocaleString()}
+      </p>
+    );
+  }
   return <p className="text-sm text-muted-foreground">Last checked {timeAgo(scan.finished_at)}</p>;
 }
 
@@ -233,6 +291,8 @@ function FilmsContent({ data }: { data: FilmList }) {
   const query = params.get("q") ?? "";
   const sortParam = params.get("sort");
   const sort: SortKey = SORTS.some((s) => s.key === sortParam) ? (sortParam as SortKey) : "title";
+  const filterParam = params.get("show");
+  const filter = FILTERS.find((f) => f.key === filterParam) ?? FILTERS[0];
 
   function update(key: string, value: string, fallback: string) {
     const next = new URLSearchParams(params);
@@ -244,10 +304,11 @@ function FilmsContent({ data }: { data: FilmList }) {
   const shown = useMemo(() => {
     const words = fold(query).split(/\s+/).filter(Boolean);
     return sortFilms(
-      data.films.filter((film) => matches(film, words)),
+      data.films.filter((film) => filter.test(film) && matches(film, words)),
       sort,
     );
-  }, [data.films, query, sort]);
+  }, [data.films, query, sort, filter]);
+  const unread = data.films.filter((f) => !f.media.read).length;
 
   const { scan } = data;
 
@@ -310,21 +371,46 @@ function FilmsContent({ data }: { data: FilmList }) {
         onQuery={(q) => update("q", q, "")}
         sort={sort}
         onSort={(s) => update("sort", s, "title")}
+        filter={filter.key}
+        onFilter={(f) => update("show", f, "all")}
         view={view}
         onView={setView}
       />
-      {query && shown.length > 0 && (
+      {(query || filter.key !== "all") && shown.length > 0 && (
         <p className="mb-3 text-sm text-muted-foreground" role="status">
           {plural(shown.length, "film")} found
         </p>
       )}
+      {filter.key !== "all" && unread > 0 && (
+        <p className="mb-3 text-sm text-muted-foreground">
+          Tailarr is still reading the details of {plural(unread, "film")}. They'll appear here if
+          they match.
+        </p>
+      )}
       {shown.length === 0 ? (
-        <EmptyState icon={SearchX} title={`No films match “${query}”`}>
-          <p>Try fewer words, or check the spelling.</p>
-          <Button variant="secondary" className="mt-4" onClick={() => update("q", "", "")}>
-            <X aria-hidden />
-            Clear search
-          </Button>
+        <EmptyState
+          icon={SearchX}
+          title={query ? `No films match “${query}”` : `No films: ${filter.label}`}
+        >
+          <p>
+            {query
+              ? "Try fewer words, or check the spelling."
+              : "None of your films match this filter."}
+          </p>
+          <div className="mt-4 flex flex-wrap justify-center gap-2">
+            {query && (
+              <Button variant="secondary" onClick={() => update("q", "", "")}>
+                <X aria-hidden />
+                Clear search
+              </Button>
+            )}
+            {filter.key !== "all" && (
+              <Button variant="secondary" onClick={() => update("show", "", "all")}>
+                <X aria-hidden />
+                Show all films
+              </Button>
+            )}
+          </div>
         </EmptyState>
       ) : view === "grid" ? (
         <FilmGrid films={shown} />
@@ -340,8 +426,10 @@ export function FilmsPage() {
   const films = useQuery({
     queryKey: ["films"],
     queryFn: api.films,
-    // While Tailarr is looking for films, check back every 2 seconds.
-    refetchInterval: (q) => (q.state.data?.scan.running ? 2000 : false),
+    // While Tailarr is looking for films, check back every 2 seconds; while it's reading
+    // film details (slower, file by file), every 5 seconds.
+    refetchInterval: (q) =>
+      q.state.data?.scan.running ? 2000 : q.state.data?.reading.running ? 5000 : false,
   });
   const rescan = useMutation({
     mutationFn: api.rescanFilms,

@@ -41,7 +41,9 @@ test("the sample films are listed, with posters", async ({ page }) => {
   // Long names wrap inside their card instead of spilling out.
   for (const card of await cards.all()) {
     const spill = await card.evaluate((el) =>
-      Array.from(el.querySelectorAll("p, span")).some((t) => t.scrollWidth > t.clientWidth + 1),
+      Array.from(el.querySelectorAll("p, span:not(.sr-only)")).some(
+        (t) => t.scrollWidth > t.clientWidth + 1,
+      ),
     );
     expect(spill, "card text should fit its card").toBe(false);
   }
@@ -91,7 +93,7 @@ test("opening a film shows its files", async ({ page }) => {
     .getByRole("link", { name: /Colour Test/ })
     .click();
   await expect(page.getByRole("heading", { level: 1, name: /Colour Test/ })).toBeVisible();
-  await expect(page.getByText("Main file")).toBeVisible();
+  await expect(page.getByText("Main file", { exact: true })).toBeVisible();
   await expect(page.getByText("Copy made by Tailarr")).toBeVisible();
   // The sample film is hardlinked to a "seeding" copy in the downloads folder.
   await expect(page.getByText("Also in your downloads")).toBeVisible();
@@ -117,7 +119,7 @@ for (const theme of ["dark", "light"] as const) {
     await films(page)
       .getByRole("link", { name: /Colour Test/ })
       .click();
-    await expect(page.getByText("Main file")).toBeVisible();
+    await expect(page.getByText("Main file", { exact: true })).toBeVisible();
     await expectNoSideways(page);
     await page.screenshot({
       path: `screenshots/${name}-film-detail.png`,

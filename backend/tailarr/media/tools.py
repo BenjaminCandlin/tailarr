@@ -6,6 +6,7 @@ file names with spaces or odd characters can't cause problems.
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import subprocess
@@ -68,6 +69,16 @@ def find_tool(name: str) -> str | None:
     return shutil.which(name)
 
 
+def _tool_env() -> dict[str, str]:
+    # The tools write track names and file names in the system language's character set.
+    # Without a UTF-8 setting (the container default is plain "C") names such as
+    # "Français" come out garbled, and mkvmerge's JSON can't even be read.
+    env = dict(os.environ)
+    env["LC_ALL"] = "C.UTF-8"
+    env["LANG"] = "C.UTF-8"
+    return env
+
+
 def run_tool(name: str, args: list[str], timeout: float | None = 60) -> ToolResult:
     """Run a tool and return its output, raising ToolError with a friendly message."""
     path = find_tool(name)
@@ -78,6 +89,9 @@ def run_tool(name: str, args: list[str], timeout: float | None = 60) -> ToolResu
             [path, *args],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
+            env=_tool_env(),
             timeout=timeout,
             check=False,
         )

@@ -45,3 +45,13 @@ export function fold(text: string): string {
 export function plural(count: number, word: string): string {
   return `${count.toLocaleString()} ${word}${count === 1 ? "" : "s"}`;
 }
+
+/** 8040 -> "2 h 14 min"; 2700 -> "45 min"; 3 -> "3 seconds". */
+export function formatDuration(seconds: number): string {
+  if (seconds < 60) return `${Math.round(seconds)} second${Math.round(seconds) === 1 ? "" : "s"}`;
+  const minutes = Math.round(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  if (hours === 0) return `${minutes} min`;
+  return rest ? `${hours} h ${rest} min` : `${hours} h`;
+}

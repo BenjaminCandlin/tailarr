@@ -208,9 +208,15 @@ class ScanStatus:
 class FilmScanner:
     """Runs one scan at a time in the background and remembers how the last one went."""
 
-    def __init__(self, engine: Engine, films_root: Callable[[], Path]) -> None:
+    def __init__(
+        self,
+        engine: Engine,
+        films_root: Callable[[], Path],
+        on_scanned: Callable[[], object] | None = None,
+    ) -> None:
         self._engine = engine
         self._films_root = films_root
+        self._on_scanned = on_scanned  # called after each successful scan
         self._lock = threading.Lock()
         self._running = False
         self._thread: threading.Thread | None = None
@@ -304,4 +310,6 @@ class FilmScanner:
         status.finished_at = time.time()
         self._save_status(status)
         log.info("Film scan of %s: %s films, error=%s", root, status.film_count, status.error)
+        if status.error is None and self._on_scanned is not None:
+            self._on_scanned()
         return status
