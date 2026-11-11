@@ -67,8 +67,6 @@ def get_connections(session: Session) -> ConnectionSettings:
 
 
 def save_connections(session: Session, settings: ConnectionSettings) -> ConnectionSettings:
-    row = session.get(Setting, CONNECTIONS_KEY) or Setting(key=CONNECTIONS_KEY, value="")
-    row.value = settings.model_dump_json()
-    session.add(row)
+    session.merge(Setting(key=CONNECTIONS_KEY, value=settings.model_dump_json()))
     session.commit()
     return settings

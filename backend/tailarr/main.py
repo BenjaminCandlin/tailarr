@@ -76,6 +76,7 @@ def create_app(config: AppConfig | None = None, *, transport: object | None = No
 
     app.state.media_reader = MediaReader(engine, lambda: [Path(p) for p in library_roots()])
     app.state.connections = Connections(engine, config, transport=transport)  # type: ignore[arg-type]
+    app.state.connections.settings()  # saves the first webhook secret now, before any thread runs
 
     def scanned() -> None:
         app.state.media_reader.start()

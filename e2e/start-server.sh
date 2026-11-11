@@ -16,5 +16,8 @@ export TAILARR_MOVIES_DIR="$tmp/data/media/movies"
 export TAILARR_TV_DIR="$tmp/data/media/tv"
 export TAILARR_WORK_DIR="$tmp/no-work-folder"
 export TAILARR_STATIC_DIR="$repo/frontend/dist"
+# A fake Radarr, Sonarr and Plex for the connection tests (stopped with this script).
+FAKE_ART_DIR="$tmp/samples/artwork" python3 "$here/fake_apps_server.py" "${FAKE_APPS_PORT:-8496}" &
+trap 'kill $! 2>/dev/null' EXIT INT TERM
 cd "$repo/backend"
-exec uv run --frozen uvicorn tailarr.main:create_app --factory --host 127.0.0.1 --port "${PORT:-8485}"
+uv run --frozen uvicorn tailarr.main:create_app --factory --host 127.0.0.1 --port "${PORT:-8485}"

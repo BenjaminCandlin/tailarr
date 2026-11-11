@@ -118,11 +118,15 @@ class ServiceClient:
             ) from error
 
     def get_bytes(self, path: str) -> bytes:
+        """A picture. Radarr/Sonarr's picture paths already include any URL base, so they're
+        joined to the server's address only (scheme, name and port)."""
+        parsed = urlparse(self.url)
+        origin = f"{parsed.scheme}://{parsed.netloc}"
         try:
             with httpx.Client(
                 timeout=TIMEOUT, transport=self._transport, follow_redirects=True
             ) as client:
-                response = client.get(f"{self.url}{path}", headers=self._headers())
+                response = client.get(f"{origin}{path}", headers=self._headers())
         except httpx.HTTPError as error:
             raise _explain(self.service, self.url, error) from error
         if response.status_code >= 400:

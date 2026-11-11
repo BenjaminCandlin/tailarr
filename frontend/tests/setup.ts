@@ -21,3 +21,11 @@ Object.defineProperty(window, "matchMedia", {
     removeEventListener: () => {},
   }),
 });
+
+// jsdom has no ResizeObserver (Radix switches measure themselves with it).
+class NoResizeObserver {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+Object.defineProperty(window, "ResizeObserver", { writable: true, value: NoResizeObserver });
