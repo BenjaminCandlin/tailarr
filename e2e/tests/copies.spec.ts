@@ -55,6 +55,7 @@ async function makeCopy(page: Page, id: number) {
     (t: { language: string }) => t.language === "jpn",
   );
   const response = await page.request.post(`/api/films/${id}/remove-tracks`, {
+    headers: { "X-Requested-With": "tailarr" }, // as Tailarr's own page sends it
     data: {
       file: MULTI_FILE,
       remove: [japanese.uid],

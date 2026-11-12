@@ -13,6 +13,7 @@ import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 
 import { EmptyState } from "@/components/EmptyState";
+import { GettingStarted } from "@/components/GettingStarted";
 import { MediaBadges } from "@/components/MediaBadges";
 import { PageHeader } from "@/components/PageHeader";
 import { Poster } from "@/components/Poster";
@@ -463,6 +464,7 @@ export function FilmsPage() {
           </div>
         }
       />
+      <GettingStarted />
       {films.isPending && <PosterPlaceholderGrid />}
       {films.isError && (
         <EmptyState icon={AlertTriangle} title="Couldn't load your films">

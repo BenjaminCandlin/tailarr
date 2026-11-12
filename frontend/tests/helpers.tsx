@@ -24,7 +24,7 @@ import { ThemeProvider } from "@/lib/theme";
 
 export const HEALTH: Health = {
   ok: false,
-  version: "0.1.0",
+  version: "1.0.0",
   tools: [
     {
       name: "mkvmerge",
@@ -285,6 +285,9 @@ export function mockBackend(handler?: Handler) {
     const custom = handler?.(url, init);
     if (custom) return custom;
     if (url.endsWith("/api/health")) return json(HEALTH);
+    if (url.endsWith("/api/auth/status"))
+      return json({ login_enabled: false, logged_in: true, username: null });
+    if (url.endsWith("/api/settings/login")) return json({ enabled: false, username: "" });
     if (url.endsWith("/api/settings/library")) return json(LIBRARY);
     if (url.endsWith("/api/settings/recycle"))
       return json({ keep_days: 30, file_count: 0, total_size: 0 });

@@ -118,9 +118,19 @@ function BottomTabBar() {
 export function AppShell() {
   return (
     <div className="min-h-dvh">
+      <a
+        href="#main"
+        className="sr-only z-50 rounded-lg bg-primary px-4 py-2 font-medium text-primary-foreground focus:not-sr-only focus:fixed focus:top-3 focus:left-3"
+      >
+        Skip to the page
+      </a>
       <Sidebar />
       <MobileTopBar />
-      <main className="px-4 pt-5 pb-28 md:ml-60 md:px-8 md:pt-8 md:pb-10">
+      <main
+        id="main"
+        tabIndex={-1}
+        className="px-4 pt-5 pb-28 outline-none md:ml-60 md:px-8 md:pt-8 md:pb-10"
+      >
         <div className="mx-auto max-w-[1600px]">
           <Outlet />
         </div>

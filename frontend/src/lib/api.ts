@@ -536,21 +536,53 @@ async function errorMessage(response: Response): Promise<string> {
   return `Something went wrong (error ${response.status}).`;
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+/** Sent with every request: Tailarr refuses changes that don't come from its own page. */
+const PAGE_HEADER = { "X-Requested-With": "tailarr" };
+
+let onLoggedOut: (() => void) | null = null;
+
+/** Called when the server says the login has run out (the page then shows the login form). */
+export function setLoggedOutHandler(handler: (() => void) | null) {
+  onLoggedOut = handler;
+}
+
+async function send(path: string, init?: RequestInit): Promise<Response> {
   let response: Response;
   try {
     response = await fetch(path, {
       ...init,
-      headers: { "Content-Type": "application/json", ...init?.headers },
+      headers: { "Content-Type": "application/json", ...PAGE_HEADER, ...init?.headers },
     });
   } catch {
     throw new ApiError("Couldn't reach Tailarr. Is the container running?");
   }
-  if (!response.ok) throw new ApiError(await errorMessage(response), response.status);
+  if (!response.ok) {
+    const message = await errorMessage(response);
+    if (response.status === 401 && message === "Please log in.") onLoggedOut?.();
+    throw new ApiError(message, response.status);
+  }
+  return response;
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await send(path, init);
   return (await response.json()) as T;
 }
 
+export type AuthStatus = { login_enabled: boolean; logged_in: boolean; username: string | null };
+export type LoginSettings = { enabled: boolean; username: string };
+
 export const api = {
+  authStatus: () => request<AuthStatus>("/api/auth/status"),
+  login: (username: string, password: string) =>
+    request<AuthStatus>("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ username, password }),
+    }),
+  logout: () => request<AuthStatus>("/api/auth/logout", { method: "POST" }),
+  loginSettings: () => request<LoginSettings>("/api/settings/login"),
+  saveLoginSettings: (body: { enabled: boolean; username?: string; password?: string }) =>
+    request<LoginSettings>("/api/settings/login", { method: "PUT", body: JSON.stringify(body) }),
   health: () => request<Health>("/api/health"),
   librarySettings: () => request<LibrarySettings>("/api/settings/library"),
   saveLibrarySettings: (settings: LibrarySettings) =>
@@ -669,8 +701,7 @@ export const api = {
       body: JSON.stringify({ enabled }),
     }),
   deleteRule: async (id: number) => {
-    const response = await fetch(`/api/rules/${id}`, { method: "DELETE" });
-    if (!response.ok) throw new ApiError(await errorMessage(response), response.status);
+    await send(`/api/rules/${id}`, { method: "DELETE" });
   },
   previewRule: (body: RuleInput) =>
     request<RulePreview>("/api/rules/preview", { method: "POST", body: JSON.stringify(body) }),
