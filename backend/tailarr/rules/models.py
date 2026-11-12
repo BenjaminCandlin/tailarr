@@ -110,3 +110,20 @@ class Rule(SQLModel, table=True):
         self.action = _ACTION.dump_json(rule.action).decode()
         self.allow_originals = rule.allow_originals
         self.allow_hardlinked = rule.allow_hardlinked
+
+
+class RuleRun(SQLModel, table=True):
+    """A rule has looked at one version of a file (path + size + date): never again.
+
+    So each new or upgraded file is handled once per rule, and Tailarr's own changes to a
+    file don't make rules run on it again.
+    """
+
+    id: int | None = DbField(default=None, primary_key=True)
+    rule_id: int = DbField(index=True)
+    path: str = DbField(index=True)
+    size: int
+    mtime: float
+    at: float
+    outcome: str  # "queued", "skipped", "no-match", "tailarr-change"
+    job_id: int | None = None

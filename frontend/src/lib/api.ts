@@ -438,6 +438,20 @@ export type ActivityEntry = {
   path: string | null;
   job_id: number | null;
   rule_id: number | null;
+  job_status: JobStatus | null;
+  job_error: string | null;
+  film_id: number | null;
+  episode_id: number | null;
+  rule_name: string | null;
+};
+
+export type Automation = {
+  settle_seconds: number;
+  watch_folders: boolean;
+  watch_since: string | null;
+  rescan_minutes: number;
+  /** New files waiting until they've finished copying. */
+  waiting: { file: string; reason: string; since: string }[];
 };
 
 export type ConditionType =
@@ -633,7 +647,9 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ path }),
     }),
-  activity: (params: { limit?: number; source?: string; rule_id?: number } = {}) =>
+  activity: (
+    params: { limit?: number; source?: string; rule_id?: number; problems?: boolean } = {},
+  ) =>
     request<ActivityEntry[]>(
       `/api/activity?${new URLSearchParams(
         Object.entries(params)
@@ -662,6 +678,12 @@ export const api = {
     request<{ group_id: string | null; jobs: number }>(`/api/rules/${id}/run`, {
       method: "POST",
       body: JSON.stringify({ confirmed: true }),
+    }),
+  automation: () => request<Automation>("/api/settings/automation"),
+  saveAutomation: (body: Pick<Automation, "settle_seconds" | "watch_folders" | "rescan_minutes">) =>
+    request<Automation>("/api/settings/automation", {
+      method: "PUT",
+      body: JSON.stringify(body),
     }),
   recycleSettings: () => request<RecycleSettings>("/api/settings/recycle"),
   saveRecycleSettings: (keepDays: number) =>

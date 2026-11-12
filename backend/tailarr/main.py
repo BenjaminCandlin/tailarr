@@ -13,7 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlmodel import Session, select
 
 from . import __version__
-from .api import actions, connections, films, health, jobs, rules, settings, tv
+from .api import actions, automation, connections, films, health, jobs, rules, settings, tv
 from .connections.service import Connections
 from .core.config import AppConfig
 from .core.db import make_engine
@@ -26,6 +26,7 @@ from .library.media_reader import MediaReader
 from .library.models import EpisodeFile, FilmFile
 from .library.scanner import FilmScanner, rescan_film_folder
 from .library.tv_scanner import TvScanner, rescan_show_folder
+from .rules.automation import AutoRunner
 
 log = logging.getLogger(__name__)
 
@@ -41,7 +42,9 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.job_queue.start()
     app.state.recycle_cleaner.start()
     app.state.connections.start()
+    app.state.auto_runner.start()
     yield
+    app.state.auto_runner.stop()
     app.state.connections.stop()
     app.state.recycle_cleaner.stop()
     app.state.job_queue.stop()
@@ -81,6 +84,9 @@ def create_app(config: AppConfig | None = None, *, transport: object | None = No
     def scanned() -> None:
         app.state.media_reader.start()
         app.state.connections.sync_if_stale()
+        auto = getattr(app.state, "auto_runner", None)
+        if auto is not None:
+            auto.scanned()
 
     app.state.film_scanner = FilmScanner(engine, films_root, scanned)
     app.state.tv_scanner = TvScanner(engine, tv_root, scanned)
@@ -132,7 +138,16 @@ def create_app(config: AppConfig | None = None, *, transport: object | None = No
     )
     app.state.job_queue.on_done.append(app.state.connections.after_job)
     app.state.folder_changed = folder_changed
-    app.state.on_webhook = []
+
+    def start_scans() -> None:
+        app.state.film_scanner.start()
+        app.state.tv_scanner.start()
+
+    app.state.auto_runner = AutoRunner(
+        engine, config, app.state.media_reader, app.state.job_queue, folder_changed, start_scans
+    )
+    app.state.on_webhook = [app.state.auto_runner.webhook_hook]
+    app.state.job_queue.on_done.append(app.state.auto_runner.after_job)
     app.state.recycle_cleaner = RecycleCleaner(engine, library_roots)
 
     app.include_router(health.router)
@@ -145,6 +160,7 @@ def create_app(config: AppConfig | None = None, *, transport: object | None = No
     app.include_router(tv.languages_router)
     app.include_router(connections.router)
     app.include_router(rules.router)
+    app.include_router(automation.router)
     app.include_router(jobs.router)
 
     _mount_frontend(app, config.static_dir)
