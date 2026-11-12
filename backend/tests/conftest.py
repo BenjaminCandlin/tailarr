@@ -57,6 +57,15 @@ def config(tmp_path: Path) -> AppConfig:
     )
 
 
+# Tailarr's own page sends this with every change (cross-site protection).
+PAGE_HEADERS = {"X-Requested-With": "tailarr"}
+
+
+def page_client(app) -> TestClient:  # noqa: ANN001
+    """A test client that talks to Tailarr the way its own web page does."""
+    return TestClient(app, headers=PAGE_HEADERS)
+
+
 @pytest.fixture
 def client(config: AppConfig) -> TestClient:
-    return TestClient(create_app(config))
+    return page_client(create_app(config))

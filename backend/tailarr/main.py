@@ -3,18 +3,32 @@
 from __future__ import annotations
 
 import logging
+import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlmodel import Session, select
 
 from . import __version__
-from .api import actions, automation, connections, films, health, jobs, rules, settings, tv
+from .api import (
+    actions,
+    auth,
+    automation,
+    connections,
+    films,
+    health,
+    jobs,
+    rules,
+    settings,
+    tv,
+)
 from .connections.service import Connections
+from .core import auth as auth_core
+from .core import housekeeping
 from .core.config import AppConfig
 from .core.db import make_engine
 from .core.paths import is_inside
@@ -63,6 +77,15 @@ def create_app(config: AppConfig | None = None, *, transport: object | None = No
     )
     app.state.config = config
     engine = app.state.engine = make_engine(config.database_path)
+    app.state.failed_logins = auth_core.FailedLogins()
+    if os.environ.get("TAILARR_DISABLE_LOGIN") == "1":
+        with Session(engine) as session:
+            login = auth_core.get_login(session)
+            if login.enabled:
+                login.enabled = False
+                auth_core.save_login(session, login)
+                log.warning("TAILARR_DISABLE_LOGIN=1: the login was switched off.")
+    _protect(app)
 
     def films_root() -> Path:
         with Session(engine) as session:
@@ -148,8 +171,11 @@ def create_app(config: AppConfig | None = None, *, transport: object | None = No
     )
     app.state.on_webhook = [app.state.auto_runner.webhook_hook]
     app.state.job_queue.on_done.append(app.state.auto_runner.after_job)
-    app.state.recycle_cleaner = RecycleCleaner(engine, library_roots)
+    app.state.recycle_cleaner = RecycleCleaner(
+        engine, library_roots, lambda: housekeeping.tidy(engine, config)
+    )
 
+    app.include_router(auth.router)
     app.include_router(health.router)
     app.include_router(settings.router)
     app.include_router(films.router)
@@ -165,6 +191,36 @@ def create_app(config: AppConfig | None = None, *, transport: object | None = No
 
     _mount_frontend(app, config.static_dir)
     return app
+
+
+def _protect(app: FastAPI) -> None:
+    """Cross-site protection for every change, and the optional login for the API."""
+
+    @app.middleware("http")
+    async def guard(request: Request, call_next):  # noqa: ANN202
+        path = request.url.path
+        if path.startswith("/api/"):
+            webhook = path.startswith("/api/webhooks/")
+            if (
+                request.method not in ("GET", "HEAD", "OPTIONS")
+                and not webhook
+                and request.headers.get(auth_core.CSRF_HEADER) != auth_core.CSRF_VALUE
+            ):
+                return JSONResponse(
+                    status_code=403,
+                    content={
+                        "detail": "Tailarr refused this request because it didn't come from "
+                        "Tailarr's own page."
+                    },
+                )
+            if not path.startswith(auth_core.OPEN_PATHS):
+                with Session(app.state.engine) as session:
+                    needs_login = auth_core.get_login(session).enabled and not (
+                        auth_core.valid_session(session, request.cookies.get(auth_core.COOKIE))
+                    )
+                if needs_login:
+                    return JSONResponse(status_code=401, content={"detail": "Please log in."})
+        return await call_next(request)
 
 
 def _mount_frontend(app: FastAPI, static_dir: Path) -> None:

@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 from tailarr.core.config import AppConfig
 from tailarr.main import create_app
+from tests.conftest import page_client
 
 
 def _with_static(config: AppConfig) -> TestClient:
@@ -14,7 +15,7 @@ def _with_static(config: AppConfig) -> TestClient:
     (static / "index.html").write_text("<html>Tailarr app</html>")
     (static / "assets" / "app.js").write_text("console.log('hi')")
     (static / "favicon.svg").write_text("<svg/>")
-    return TestClient(create_app(config))
+    return page_client(create_app(config))
 
 
 def test_pages_serve_the_app(config: AppConfig) -> None:

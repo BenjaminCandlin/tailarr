@@ -1,6 +1,6 @@
 [project]
 name = "tailarr"
-version = "0.1.0"
+version = "1.0.0"
 description = "A friendly web front-end for MKVToolNix, for Unraid."
 requires-python = ">=3.12"
 license = "GPL-3.0-or-later"

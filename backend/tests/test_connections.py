@@ -18,6 +18,7 @@ from sqlmodel import Session, select
 from tailarr.core.config import AppConfig
 from tailarr.jobs.models import CopyRecord, RecycledFile
 from tailarr.main import create_app
+from tests.conftest import page_client
 
 from .fake_apps import PLEX_TOKEN, RADARR_KEY, SONARR_KEY, FakeApps, movie, series
 
@@ -52,7 +53,7 @@ def library(samples_dir: Path, config: AppConfig) -> tuple[Path, Path]:
 
 @pytest.fixture
 def app_client(config: AppConfig, apps: FakeApps, library):
-    client = TestClient(create_app(config, transport=apps.transport()))
+    client = page_client(create_app(config, transport=apps.transport()))
     movies, tv = library
     client.put(
         "/api/settings/library",

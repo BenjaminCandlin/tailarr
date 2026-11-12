@@ -61,7 +61,7 @@ VOLUME ["/config"]
 EXPOSE 8484
 
 HEALTHCHECK --interval=60s --timeout=10s --start-period=20s \
-    CMD python -c "import os,urllib.request; urllib.request.urlopen('http://127.0.0.1:%s/api/health' % os.environ.get('TAILARR_PORT','8484'), timeout=8)"
+    CMD python -c "import os,urllib.request; urllib.request.urlopen('http://127.0.0.1:%s/api/ping' % os.environ.get('TAILARR_PORT','8484'), timeout=8)"
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["python", "-m", "tailarr"]

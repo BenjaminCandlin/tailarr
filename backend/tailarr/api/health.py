@@ -100,3 +100,9 @@ def health(
     return HealthOut(
         ok=ok, version=__version__, tools=tools, folders=folders, running_as=running_as
     )
+
+
+@router.get("/ping")
+def ping() -> dict[str, bool]:
+    """For Docker's health check: Tailarr is up. Needs no login and says nothing else."""
+    return {"ok": True}

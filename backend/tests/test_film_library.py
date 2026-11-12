@@ -15,6 +15,7 @@ from tailarr.core.config import AppConfig
 from tailarr.library.artwork import find_backdrop, find_poster, thumbnail
 from tailarr.library.scanner import STALE_AFTER_SECONDS, find_films
 from tailarr.main import create_app
+from tests.conftest import page_client
 
 SAMPLE_FILMS = {
     "Blu-ray Night",
@@ -238,7 +239,7 @@ def test_list_is_refreshed_when_stale(client: TestClient, library: Path) -> None
 
 
 def test_scan_status_survives_restart(scanned: TestClient, config: AppConfig) -> None:
-    again = TestClient(create_app(config))
+    again = page_client(create_app(config))
     status = again.get("/api/films/scan").json()
     assert status["film_count"] == len(SAMPLE_FILMS)
     assert status["running"] is False
@@ -279,7 +280,7 @@ def test_thumbnail_permissions_follow_umask(tmp_path: Path) -> None:
 
 def test_scan_starts_when_tailarr_starts(config: AppConfig, library: Path) -> None:
     app = create_app(config)
-    with TestClient(app) as client:
+    with page_client(app) as client:
         app.state.film_scanner.wait(30)
         assert len(_films(client)) == len(SAMPLE_FILMS)
 
