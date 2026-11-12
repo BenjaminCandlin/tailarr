@@ -440,6 +440,58 @@ export type ActivityEntry = {
   rule_id: number | null;
 };
 
+export type ConditionType =
+  "has_dolby_vision" | "has_hdr10plus" | "is_4k" | "has_audio_not_in" | "has_subtitles_not_in";
+
+export type Condition = { type: ConditionType; languages: string[] };
+
+export type RuleInput = {
+  name: string;
+  enabled: boolean;
+  scope: "films" | "tv" | "both";
+  conditions: Condition[];
+  action: BatchAction;
+  /** Rules never change original files unless this is ticked. */
+  allow_originals: boolean;
+  /** ...nor seeding (hardlinked) files in place unless this is ticked too. */
+  allow_hardlinked: boolean;
+};
+
+export type Rule = RuleInput & {
+  id: number;
+  /** The whole rule in plain English. */
+  sentence: string;
+  action_text: string;
+  changes_originals: boolean;
+  created_at: string;
+  updated_at: string;
+  last_run_at: string | null;
+};
+
+export type RulePreviewItem = {
+  kind: "film" | "episode";
+  id: number;
+  label: string;
+  file: string;
+  will_run: boolean;
+  lines: string[];
+  reason: string | null;
+  hardlinked: boolean;
+  new_file: string | null;
+};
+
+export type RulePreview = {
+  sentence: string;
+  changes_originals: boolean;
+  items: RulePreviewItem[];
+  will_run: number;
+  skipped: number;
+  not_matching: number;
+  not_read: number;
+  space: { label: string; needed: number; free: number; enough: boolean }[];
+  enough_space: boolean;
+};
+
 export type RecycleSettings = { keep_days: number; file_count: number; total_size: number };
 
 export class ApiError extends Error {
@@ -589,6 +641,28 @@ export const api = {
           .map(([k, v]) => [k, String(v)]),
       )}`,
     ),
+  rules: () => request<Rule[]>("/api/rules"),
+  rule: (id: number | string) => request<Rule>(`/api/rules/${id}`),
+  createRule: (body: RuleInput) =>
+    request<Rule>("/api/rules", { method: "POST", body: JSON.stringify(body) }),
+  saveRule: (id: number, body: RuleInput) =>
+    request<Rule>(`/api/rules/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+  setRuleEnabled: (id: number, enabled: boolean) =>
+    request<Rule>(`/api/rules/${id}/enabled`, {
+      method: "POST",
+      body: JSON.stringify({ enabled }),
+    }),
+  deleteRule: async (id: number) => {
+    const response = await fetch(`/api/rules/${id}`, { method: "DELETE" });
+    if (!response.ok) throw new ApiError(await errorMessage(response), response.status);
+  },
+  previewRule: (body: RuleInput) =>
+    request<RulePreview>("/api/rules/preview", { method: "POST", body: JSON.stringify(body) }),
+  runRule: (id: number) =>
+    request<{ group_id: string | null; jobs: number }>(`/api/rules/${id}/run`, {
+      method: "POST",
+      body: JSON.stringify({ confirmed: true }),
+    }),
   recycleSettings: () => request<RecycleSettings>("/api/settings/recycle"),
   saveRecycleSettings: (keepDays: number) =>
     request<RecycleSettings>("/api/settings/recycle", {
