@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 
 from tailarr.core.config import AppConfig
 from tailarr.main import create_app
+from tests.conftest import page_client
 
 
 def test_defaults_come_from_config(client: TestClient, config: AppConfig) -> None:
@@ -40,7 +41,7 @@ def test_save_and_reload(client: TestClient, config: AppConfig) -> None:
     assert response.json()["movies_dir"] == "/data/media/films"  # trailing slash tidied
 
     # A fresh app on the same config folder remembers the settings.
-    again = TestClient(create_app(config)).get("/api/settings/library").json()
+    again = page_client(create_app(config)).get("/api/settings/library").json()
     assert again["tv_dir"] == "/data/media/shows"
     assert again["path_mappings"] == [{"remote": "/movies", "local": "/data/media/films"}]
 

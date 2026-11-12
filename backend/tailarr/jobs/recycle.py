@@ -106,9 +106,15 @@ def clean_recycle(engine: Engine, roots: list[str], now: float | None = None) ->
 class RecycleCleaner:
     """Empties old files from the recycle folders at start-up and every few hours."""
 
-    def __init__(self, engine: Engine, roots: Callable[[], list[str]]) -> None:
+    def __init__(
+        self,
+        engine: Engine,
+        roots: Callable[[], list[str]],
+        also: Callable[[], None] | None = None,
+    ) -> None:
         self._engine = engine
         self._roots = roots
+        self._also = also  # other tidying that runs on the same timer
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
 
@@ -126,6 +132,8 @@ class RecycleCleaner:
         while not self._stop.is_set():
             try:
                 clean_recycle(self._engine, self._roots())
+                if self._also is not None:
+                    self._also()
             except Exception:  # never let clean-up crash the app
                 log.exception("Cleaning the recycle folders failed")
             self._stop.wait(CLEAN_EVERY_SECONDS)

@@ -24,6 +24,8 @@ FROM python:3.12-slim-bookworm
 
 # Pinned dovi_tool release (https://github.com/quietvoid/dovi_tool/releases).
 ARG DOVI_TOOL_VERSION=2.3.4
+# SHA-256 of that release's x86_64 musl download: the build stops if the file is different.
+ARG DOVI_TOOL_SHA256=1844258e13c26607b32224bf1fa82b595d3b35949f5467405fda560daad32b3f
 
 RUN set -eux; \
     apt-get update; \
@@ -34,8 +36,10 @@ RUN set -eux; \
         > /etc/apt/sources.list.d/mkvtoolnix.list; \
     apt-get update; \
     apt-get install -y --no-install-recommends mkvtoolnix; \
-    curl -fsSL "https://github.com/quietvoid/dovi_tool/releases/download/${DOVI_TOOL_VERSION}/dovi_tool-${DOVI_TOOL_VERSION}-x86_64-unknown-linux-musl.tar.gz" \
-        | tar -xz -C /usr/local/bin; \
+    curl -fsSL -o /tmp/dovi_tool.tar.gz "https://github.com/quietvoid/dovi_tool/releases/download/${DOVI_TOOL_VERSION}/dovi_tool-${DOVI_TOOL_VERSION}-x86_64-unknown-linux-musl.tar.gz"; \
+    echo "${DOVI_TOOL_SHA256}  /tmp/dovi_tool.tar.gz" | sha256sum -c -; \
+    tar -xzf /tmp/dovi_tool.tar.gz -C /usr/local/bin; \
+    rm /tmp/dovi_tool.tar.gz; \
     chmod 0755 /usr/local/bin/dovi_tool; \
     dovi_tool --version; mkvmerge --version; mediainfo --version; \
     apt-get purge -y --auto-remove curl gnupg; \
@@ -61,7 +65,7 @@ VOLUME ["/config"]
 EXPOSE 8484
 
 HEALTHCHECK --interval=60s --timeout=10s --start-period=20s \
-    CMD python -c "import os,urllib.request; urllib.request.urlopen('http://127.0.0.1:%s/api/health' % os.environ.get('TAILARR_PORT','8484'), timeout=8)"
+    CMD python -c "import os,urllib.request; urllib.request.urlopen('http://127.0.0.1:%s/api/ping' % os.environ.get('TAILARR_PORT','8484'), timeout=8)"
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["python", "-m", "tailarr"]

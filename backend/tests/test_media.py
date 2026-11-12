@@ -24,6 +24,7 @@ from tailarr.media.describe import (
 )
 from tailarr.media.languages import language_name
 from tailarr.media.probe import ReadError, describe, read_file
+from tests.conftest import page_client
 
 from .conftest import make_samples
 
@@ -418,7 +419,7 @@ def test_media_reads_once_then_remembers(scanned: TestClient, config: AppConfig)
     again = scanned.get(f"/api/films/{film_id}/media", params={"refresh": True}).json()
     assert again["read_at"] >= first["read_at"]
     # Remembered across restarts.
-    restarted = TestClient(create_app(config))
+    restarted = page_client(create_app(config))
     assert restarted.get(f"/api/films/{film_id}/media").json()["read_at"] == again["read_at"]
 
 
@@ -493,7 +494,7 @@ def test_records_kept_when_films_folder_is_missing(read: TestClient, library: Pa
 
 def test_reader_starts_when_tailarr_starts(config: AppConfig, library: Path) -> None:
     app = create_app(config)
-    with TestClient(app) as client:
+    with page_client(app) as client:
         app.state.film_scanner.wait(30)
         app.state.media_reader.wait(60)
         assert all(f["media"]["read"] for f in _films(client).values())

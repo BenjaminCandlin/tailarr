@@ -21,6 +21,7 @@ from tailarr.jobs.engine import JobQueue
 from tailarr.jobs.models import CopyRecord
 from tailarr.main import create_app
 from tailarr.media.probe import describe, read_file
+from tests.conftest import page_client
 
 COLOUR = "Colour Test (2023)"
 COLOUR_FILE = "Colour Test (2023) WEBDL-2160p DV HDR10.mkv"
@@ -345,7 +346,7 @@ def test_profile_7_with_a_separate_enhancement_track(
 def test_work_folder_is_used_when_mounted(library: Path, config: AppConfig, tmp_path: Path) -> None:
     work = tmp_path / "work"
     work.mkdir()
-    client = TestClient(create_app(dataclasses.replace(config, work_dir=work)))
+    client = page_client(create_app(dataclasses.replace(config, work_dir=work)))
     queue = _start(client)
     try:
         film_id = _film_id(client, "Blu-ray Night")

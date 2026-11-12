@@ -109,7 +109,8 @@ def condition_met(condition: Condition, details: MediaDetails) -> bool:
 def _records(session: Session, paths: list[str]) -> dict[str, MediaRecord]:
     if not paths:
         return {}
-    return {r.path: r for r in session.exec(select(MediaRecord)).all() if r.path in set(paths)}
+    wanted = set(paths)
+    return {r.path: r for r in session.exec(select(MediaRecord)).all() if r.path in wanted}
 
 
 def candidates(session: Session, config: AppConfig, scope: str) -> list[Candidate]:

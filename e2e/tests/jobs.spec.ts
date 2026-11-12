@@ -115,6 +115,7 @@ async function finishedJob(page: Page, label: string) {
   const response = await page.request.post(
     `/api/films/${film.id}/track-settings`,
     {
+      headers: { "X-Requested-With": "tailarr" }, // as Tailarr's own page sends it
       data: {
         file,
         confirmed: true,

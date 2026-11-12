@@ -338,6 +338,7 @@ test("a Sonarr import starts an enabled rule by itself", async ({ page }) => {
   // Don't wait the usual minute for the file to settle.
   await page.request.put("/api/settings/automation", {
     data: { settle_seconds: 0, watch_folders: false, rescan_minutes: 15 },
+    headers: { "X-Requested-With": "tailarr" },
   });
   const { root } = await (await page.request.get("/api/tv")).json();
   const fs = await import("node:fs");
@@ -358,4 +359,41 @@ test("a Sonarr import starts an enabled rule by itself", async ({ page }) => {
   await expect(page.getByText(/Arrived By Itself/).first()).toBeVisible();
   await page.screenshot({ path: "screenshots/changes-activity-rule.png", fullPage: true });
   expect(fs.existsSync(added.replace(".mkv", " - Tailarr.mkv"))).toBe(true);
+});
+
+test("switch the login on, log out, log back in, and switch it off", async ({ page }) => {
+  await page.goto("/settings");
+  await page.getByRole("switch", { name: /Ask for a username/ }).click();
+  await page.locator("#login-name").fill("ben");
+  await page.getByLabel("Password", { exact: true }).fill("correct horse");
+  await page.getByLabel("Password again").fill("correct horse");
+  await page.getByRole("button", { name: "Save login" }).click();
+  await expect(page.getByRole("button", { name: "Log out" })).toBeVisible();
+
+  // Someone else (no cookie) only sees the login form, and the API refuses them.
+  const stranger = await page.context().browser()!.newContext();
+  const other = await stranger.newPage();
+  await other.goto(page.url().replace(/\/settings.*/, "/films"));
+  await expect(other.getByRole("heading", { name: "Log in to Tailarr" })).toBeVisible();
+  await other.screenshot({ path: "screenshots/changes-login.png" });
+  expect((await other.request.get("/api/films")).status()).toBe(401);
+  await other.getByLabel("Username").fill("ben");
+  await other.getByLabel("Password").fill("wrong password");
+  await other.getByRole("button", { name: "Log in" }).click();
+  await expect(other.getByRole("alert")).toHaveText("Wrong username or password.");
+  await other.getByLabel("Password").fill("correct horse");
+  await other.getByRole("button", { name: "Log in" }).click();
+  await expect(other.getByRole("heading", { level: 1, name: "Films" })).toBeVisible();
+  await stranger.close();
+
+  await page.getByRole("button", { name: "Log out" }).click();
+  await expect(page.getByRole("heading", { name: "Log in to Tailarr" })).toBeVisible();
+  await page.getByLabel("Username").fill("ben");
+  await page.getByLabel("Password").fill("correct horse");
+  await page.getByRole("button", { name: "Log in" }).click();
+  await expect(page.getByRole("button", { name: "Log out" })).toBeVisible();
+  await page.goto("/settings");
+  await page.getByRole("switch", { name: /Ask for a username/ }).click();
+  await page.getByRole("button", { name: "Save login" }).click();
+  await expect(page.getByRole("button", { name: "Log out" })).toHaveCount(0);
 });
