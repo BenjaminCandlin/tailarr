@@ -252,3 +252,45 @@ test("make HDR10 copies for a whole season, followed as a group in the queue", a
   ).toBeVisible();
   await expect(page.getByText("Copy made by Tailarr")).toBeVisible();
 });
+
+test("connect Radarr and Plex: titles and posters appear, webhooks are heard", async ({
+  page,
+}) => {
+  await page.goto("/settings");
+  const radarr = page.getByTestId("connection-radarr");
+  await radarr.getByLabel("Address").fill("http://127.0.0.1:8496/radarr");
+  await radarr.getByLabel("API key").fill("radarr-key");
+  const plex = page.getByTestId("connection-plex");
+  await plex.getByLabel("Address").fill("http://127.0.0.1:8496/plex");
+  await plex.getByLabel("Plex token").fill("plex-token");
+  await page.getByRole("button", { name: "Save connections" }).click();
+  await expect(page.getByTestId("connection-radarr")).toContainText(
+    "Connected",
+  );
+  await expect(page.getByTestId("sync-status")).toContainText("3 films", {
+    timeout: 30_000,
+  });
+
+  // A Radarr test message, as Radarr sends when the webhook is saved.
+  const path = (
+    await (await page.request.get("/api/settings/connections")).json()
+  ).webhook_paths.radarr;
+  const reply = await page.request.post(path, { data: { eventType: "Test" } });
+  expect((await reply.json()).message).toContain("The connection works");
+  await page.reload();
+  await expect(
+    page.getByText("Radarr sent a test message. The connection works."),
+  ).toBeVisible();
+  await page.screenshot({
+    path: "screenshots/changes-connections-saved.png",
+    fullPage: true,
+  });
+
+  await page.goto("/films");
+  const card = page.getByRole("list", { name: "Films" }).getByRole("link", {
+    name: /Streaming Only: The Film/,
+  });
+  await expect(card).toBeVisible();
+  await expect(card.locator("img")).toBeVisible();
+  await page.screenshot({ path: "screenshots/changes-radarr-posters.png" });
+});

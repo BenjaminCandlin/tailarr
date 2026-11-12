@@ -5,6 +5,7 @@ import { vi } from "vitest";
 
 import { AppRoutes, makeQueryClient } from "@/App";
 import type {
+  Connections,
   Episode,
   EpisodeDetail,
   Job,
@@ -291,6 +292,8 @@ export function mockBackend(handler?: Handler) {
     if (url.endsWith("/api/jobs"))
       return json({ jobs: [], counts: { running: 0, queued: 0 }, groups: [] });
     if (url.endsWith("/api/languages")) return json(LANGUAGES);
+    if (url.endsWith("/api/settings/connections")) return json(CONNECTIONS);
+    if (url.includes("/api/activity")) return json([]);
     if (url.endsWith("/api/films")) return json(FILMS);
     if (url.endsWith("/api/films/5")) return json(FILM_DETAIL);
     if (url.includes("/api/films/5/media")) {
@@ -449,4 +452,24 @@ export const EPISODE_DETAIL: EpisodeDetail = {
   backdrop_url: null,
   folder: "/data/media/tv/Another Show (2022)/Season 01",
   files: [{ ...FILM_DETAIL.files[0], name: "Another Show (2022) - S01E02 - Middle.mkv" }],
+};
+
+export const CONNECTIONS: Connections = {
+  radarr: { url: "http://radarr:7878", has_key: true },
+  sonarr: { url: "", has_key: false },
+  plex: { url: "", has_key: false },
+  plex_refresh: true,
+  arr_rescan: true,
+  tidy_copies: true,
+  webhook_paths: {
+    radarr: "/api/webhooks/radarr?secret=s3cret",
+    sonarr: "/api/webhooks/sonarr?secret=s3cret",
+  },
+  sync: {
+    running: false,
+    finished_at: "2026-11-11T10:00:00Z",
+    films: 9,
+    shows: null,
+    errors: null,
+  },
 };

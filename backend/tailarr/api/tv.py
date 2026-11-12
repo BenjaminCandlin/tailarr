@@ -25,6 +25,8 @@ from ..actions.plans import (
     plan_file,
     space_totals,
 )
+from ..connections.models import ExternalInfo
+from ..connections.service import external_info
 from ..core.config import AppConfig
 from ..core.paths import is_inside
 from ..core.settings_store import get_library_settings
@@ -34,6 +36,7 @@ from ..jobs.models import JobGroup
 from ..library.artwork import thumbnail
 from ..library.media_reader import MediaReader, details_of
 from ..library.models import Episode, EpisodeFile, Show
+from ..library.naming import sort_key
 from ..library.tv_naming import episode_label, season_label
 from ..library.tv_scanner import TvScanner
 from ..media.languages import language_choices
@@ -54,6 +57,7 @@ from .common import (
     time_of,
 )
 from .deps import get_config, get_session
+from .external import arr_artwork, artwork_version
 from .jobs import get_queue
 
 router = APIRouter(prefix="/api/tv")
@@ -136,16 +140,26 @@ class EpisodeDetailOut(EpisodeOut):
     files: list[FileOut]
 
 
-def _poster_url(show: Show) -> str | None:
-    if not show.poster_path:
-        return None
-    return f"/api/tv/shows/{show.id}/poster?v={int(show.poster_mtime or 0)}"
+def _poster_url(show: Show, info: ExternalInfo | None = None) -> str | None:
+    if show.poster_path:
+        return f"/api/tv/shows/{show.id}/poster?v={int(show.poster_mtime or 0)}"
+    if info is not None and info.poster_file:
+        return f"/api/tv/shows/{show.id}/poster?v={artwork_version(info.poster_file)}"
+    return None
 
 
-def _backdrop_url(show: Show) -> str | None:
-    if not show.backdrop_path:
-        return None
-    return f"/api/tv/shows/{show.id}/backdrop?v={int(show.backdrop_mtime or 0)}"
+def _backdrop_url(show: Show, info: ExternalInfo | None = None) -> str | None:
+    if show.backdrop_path:
+        return f"/api/tv/shows/{show.id}/backdrop?v={int(show.backdrop_mtime or 0)}"
+    if info is not None and info.backdrop_file:
+        return f"/api/tv/shows/{show.id}/backdrop?v={artwork_version(info.backdrop_file)}"
+    return None
+
+
+def _title(show: Show, info: ExternalInfo | None) -> tuple[str, int | None]:
+    if info is not None and info.title:
+        return info.title, info.year or show.year
+    return show.title, show.year
 
 
 _RESOLUTION_ORDER = ["4K", "1440p", "1080p", "720p", "576p", "480p", "SD"]
@@ -194,13 +208,16 @@ def _episode_out(
     }
 
 
-def _show_out(show: Show, media: MediaSummaryOut, dv_episodes: int) -> dict:
+def _show_out(
+    show: Show, media: MediaSummaryOut, dv_episodes: int, info: ExternalInfo | None = None
+) -> dict:
+    title, year = _title(show, info)
     return {
         "id": show.id,
-        "title": show.title,
-        "year": show.year,
+        "title": title,
+        "year": year,
         "folder_name": show.folder_name,
-        "poster_url": _poster_url(show),
+        "poster_url": _poster_url(show, info),
         "size": show.size,
         "added_at": time_of(show.added_at),
         "season_count": show.season_count,
@@ -261,12 +278,14 @@ def list_shows(
             summary_of(records.get(main.path), main.size, main.mtime)
         )
     shows = []
+    infos = external_info(session)
     for show in session.exec(select(Show).order_by(Show.sort_title, Show.year)).all():
         if not is_inside(show.folder, root):
             continue
         summaries = per_show.get(show.id or 0, [])
         dv = sum(1 for s in summaries if "Dolby Vision" in s.hdr)
-        shows.append(ShowOut(**_show_out(show, _combine(summaries), dv)))
+        shows.append(ShowOut(**_show_out(show, _combine(summaries), dv, infos.get(show.folder))))
+    shows.sort(key=lambda s: (sort_key(s.title), s.year or 0))
     return TvListOut(root=root, shows=shows, scan=scan_out(scanner), reading=reading_out(reader))
 
 
@@ -329,10 +348,11 @@ def show_detail(
             EpisodeOut(**_episode_out(episode, main, media, episode.id in with_copies))
         )
     dv = sum(1 for m in all_media if "Dolby Vision" in m.hdr)
+    info = session.get(ExternalInfo, show.folder)
     return ShowDetailOut(
-        **_show_out(show, _combine(all_media), dv),
+        **_show_out(show, _combine(all_media), dv, info),
         folder=show.folder,
-        backdrop_url=_backdrop_url(show),
+        backdrop_url=_backdrop_url(show, info),
         tvdb_id=show.tvdb_id,
         seasons=list(seasons.values()),
     )
@@ -342,9 +362,12 @@ def _artwork(session: Session, config: AppConfig, show_id: int, kind: str) -> Pa
     show = _get_show(session, config, show_id)
     stored = show.poster_path if kind == "poster" else show.backdrop_path
     # Check again at the moment of reading: only pictures inside the TV folder are served.
-    if not stored or not is_inside(stored, _tv_root(session, config)) or not Path(stored).is_file():
+    if stored and is_inside(stored, _tv_root(session, config)) and Path(stored).is_file():
+        return Path(stored)
+    cached = arr_artwork(session.get(ExternalInfo, show.folder), kind, config)
+    if cached is None:
         raise HTTPException(status_code=404, detail="No picture for this show.")
-    return Path(stored)
+    return cached
 
 
 @router.get("/shows/{show_id}/poster", response_model=None)
@@ -388,9 +411,12 @@ def _episode_files(session: Session, episode: Episode) -> list[EpisodeFile]:
     return sorted(files, key=lambda f: (f.name != episode.main_file, f.is_copy, f.name))
 
 
-def episode_subject(episode: Episode, show: Show) -> str:
+def episode_subject(episode: Episode, show: Show, info: ExternalInfo | None = None) -> str:
     """'Test Show – S01E02 – The Second One'."""
-    parts = [show.title, episode_label(episode.season, episode.episode, episode.episode_end)]
+    parts = [
+        _title(show, info)[0],
+        episode_label(episode.season, episode.episode, episode.episode_end),
+    ]
     if episode.title:
         parts.append(episode.title)
     return " – ".join(p for p in parts if p)
@@ -402,7 +428,7 @@ def load_episode(session: Session, config: AppConfig, episode_id: int) -> Item:
     return Item(
         kind="episode",
         id=episode_id,
-        subject=episode_subject(episode, show),
+        subject=episode_subject(episode, show, session.get(ExternalInfo, show.folder)),
         folder=episode.folder,
         root=_tv_root(session, config),
         main_file=episode.main_file,
@@ -417,6 +443,7 @@ def episode_detail(
     session: Annotated[Session, Depends(get_session)],
 ) -> EpisodeDetailOut:
     episode, show = _get_episode(session, config, episode_id)
+    info = session.get(ExternalInfo, show.folder)
     files = _episode_files(session, episode)
     out_files = files_out(session, list(files), episode.main_file)
     main_out = next((f for f in out_files if f.is_main), None)
@@ -429,10 +456,10 @@ def episode_detail(
             any(f.is_copy for f in files),
         ),
         show_id=show.id,  # type: ignore[arg-type]
-        show_title=show.title,
-        show_year=show.year,
-        poster_url=_poster_url(show),
-        backdrop_url=_backdrop_url(show),
+        show_title=_title(show, info)[0],
+        show_year=_title(show, info)[1],
+        poster_url=_poster_url(show, info),
+        backdrop_url=_backdrop_url(show, info),
         folder=episode.folder,
         files=out_files,
     )
@@ -489,8 +516,9 @@ class BatchStartedOut(BaseModel):
     jobs: int
 
 
-def _scope(show: Show, season: int | None) -> str:
-    return show.title if season is None else f"{show.title}, {season_label(season)}"
+def _scope(show: Show, season: int | None, info: ExternalInfo | None = None) -> str:
+    title = _title(show, info)[0]
+    return title if season is None else f"{title}, {season_label(season)}"
 
 
 def _batch_plans(
@@ -543,7 +571,7 @@ def _batch_preview(
     show = _get_show(session, config, show_id)
     plans, space = _batch_plans(session, config, reader, show, body)
     action = describe_action(body.action)
-    scope = _scope(show, body.season)
+    scope = _scope(show, body.season, session.get(ExternalInfo, show.folder))
     files = []
     for episode, plan in plans:
         label = episode_label(episode.season, episode.episode, episode.episode_end)
@@ -620,7 +648,7 @@ def start_batch(
         queue.submit(
             plan.job_kind,
             title=plan.job_title or plan.job_kind,
-            subject=episode_subject(episode, show),
+            subject=episode_subject(episode, show, session.get(ExternalInfo, show.folder)),
             path=plan.path,
             params=plan.params,
             episode_id=episode.id,

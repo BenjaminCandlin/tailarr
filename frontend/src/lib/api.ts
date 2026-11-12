@@ -248,6 +248,8 @@ export type ReplaceOriginalPreview = {
   recycle_folder: string;
   /** An HDR10 copy: replacing the original removes Dolby Vision from the film. */
   loses_dolby_vision: boolean;
+  /** "Radarr"/"Sonarr" when connected: it may download a Dolby Vision release again. */
+  may_redownload: string | null;
 };
 
 export type Hdr10CopyPreview = {
@@ -387,6 +389,57 @@ export type BatchStarted = { group_id: string; title: string; jobs: number };
 
 export type Language = { code: string; name: string; common: boolean };
 
+export type ServiceName = "radarr" | "sonarr" | "plex";
+
+export type Connections = {
+  radarr: { url: string; has_key: boolean };
+  sonarr: { url: string; has_key: boolean };
+  plex: { url: string; has_key: boolean };
+  plex_refresh: boolean;
+  arr_rescan: boolean;
+  tidy_copies: boolean;
+  /** Add after Tailarr's own address for Radarr/Sonarr's Webhook connection. */
+  webhook_paths: Record<"radarr" | "sonarr", string>;
+  sync: {
+    running: boolean;
+    finished_at: string | null;
+    films: number | null;
+    shows: number | null;
+    errors: Record<string, string> | null;
+  };
+};
+
+export type ConnectionsInput = {
+  radarr: { url: string; api_key?: string };
+  sonarr: { url: string; api_key?: string };
+  plex: { url: string; api_key?: string };
+  plex_refresh: boolean;
+  arr_rescan: boolean;
+  tidy_copies: boolean;
+};
+
+export type ConnectionTest = { ok: boolean; message: string; details: string | null };
+
+export type MappingTest = {
+  path: string;
+  exists: boolean;
+  inside_library: boolean;
+  message: string;
+};
+
+export type ActivityEntry = {
+  id: number;
+  at: string;
+  source: string;
+  kind: string;
+  message: string;
+  ok: boolean;
+  details: string | null;
+  path: string | null;
+  job_id: number | null;
+  rule_id: number | null;
+};
+
 export type RecycleSettings = { keep_days: number; file_count: number; total_size: number };
 
 export class ApiError extends Error {
@@ -509,6 +562,33 @@ export const api = {
   languages: () => request<Language[]>("/api/languages"),
   cancelGroup: (groupId: string) =>
     request<{ cancelled: number }>(`/api/jobs/groups/${groupId}/cancel`, { method: "POST" }),
+  connections: () => request<Connections>("/api/settings/connections"),
+  saveConnections: (body: ConnectionsInput) =>
+    request<Connections>("/api/settings/connections", {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
+  testConnection: (service: ServiceName, url: string, apiKey: string) =>
+    request<ConnectionTest>("/api/settings/connections/test", {
+      method: "POST",
+      body: JSON.stringify({ service, url, api_key: apiKey }),
+    }),
+  newWebhookSecret: () =>
+    request<Connections>("/api/settings/connections/new-secret", { method: "POST" }),
+  syncConnections: () => request<unknown>("/api/connections/sync", { method: "POST" }),
+  testPathMapping: (path: string) =>
+    request<MappingTest>("/api/settings/path-mappings/test", {
+      method: "POST",
+      body: JSON.stringify({ path }),
+    }),
+  activity: (params: { limit?: number; source?: string; rule_id?: number } = {}) =>
+    request<ActivityEntry[]>(
+      `/api/activity?${new URLSearchParams(
+        Object.entries(params)
+          .filter(([, v]) => v !== undefined)
+          .map(([k, v]) => [k, String(v)]),
+      )}`,
+    ),
   recycleSettings: () => request<RecycleSettings>("/api/settings/recycle"),
   saveRecycleSettings: (keepDays: number) =>
     request<RecycleSettings>("/api/settings/recycle", {

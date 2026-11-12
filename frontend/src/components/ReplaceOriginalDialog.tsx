@@ -79,6 +79,13 @@ function Summary({
               Dolby Vision properly will no longer get it. Most people keep both versions side by
               side instead: Plex lets each device play the one that suits it.
             </p>
+            {preview.may_redownload && (
+              <p className="mt-2" data-testid="may-redownload">
+                {preview.may_redownload} is connected: if its quality settings prefer Dolby Vision
+                (for example TRaSH Guides custom formats), {preview.may_redownload} may see that
+                Dolby Vision is gone and download a Dolby Vision release again as an “upgrade”.
+              </p>
+            )}
           </div>
         </div>
       )}

@@ -32,6 +32,7 @@ const REPLACE: ReplaceOriginalPreview = {
   keep_days: 30,
   recycle_folder: "/data/media/movies/Colour Test (2023)/.tailarr-recycle",
   loses_dolby_vision: false,
+  may_redownload: null,
 };
 
 // The page has both the table (computers) and the cards (phones); the table comes first.
@@ -307,6 +308,24 @@ describe("replacing the original", () => {
     expect(confirm).toBeDisabled();
     await userEvent.click(tick);
     expect(confirm).toBeEnabled();
+    expect(within(dialog).queryByTestId("may-redownload")).toBeNull();
+  });
+
+  it("warns that a connected Radarr may download Dolby Vision again", async () => {
+    mockBackend((url) => {
+      if (url.endsWith("/api/films/5")) return json(withCopy);
+      if (url.endsWith("/replace-original/preview"))
+        return json({ ...REPLACE, loses_dolby_vision: true, may_redownload: "Radarr" });
+      return undefined;
+    });
+    await openFilm();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Replace the original with this copy…" }),
+    );
+    const dialog = await screen.findByRole("dialog");
+    expect(await within(dialog).findByTestId("may-redownload")).toHaveTextContent(
+      "Radarr is connected: if its quality settings prefer Dolby Vision",
+    );
   });
 
   it("explains why a copy can't replace the original", async () => {
