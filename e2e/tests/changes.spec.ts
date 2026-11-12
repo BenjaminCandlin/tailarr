@@ -333,3 +333,29 @@ test("create a rule from an example, switch it on and run it now", async ({
     },
   );
 });
+
+test("a Sonarr import starts an enabled rule by itself", async ({ page }) => {
+  // Don't wait the usual minute for the file to settle.
+  await page.request.put("/api/settings/automation", {
+    data: { settle_seconds: 0, watch_folders: false, rescan_minutes: 15 },
+  });
+  const { root } = await (await page.request.get("/api/tv")).json();
+  const fs = await import("node:fs");
+  const season = `${root}/Test Show/Season 01`;
+  const added = `${season}/Test Show - S01E05 - Arrived By Itself.mkv`;
+  fs.copyFileSync(`${season}/Test Show - S01E03 - Many Voices.mkv`, added);
+  const path = (await (await page.request.get("/api/settings/connections")).json()).webhook_paths
+    .sonarr;
+  const reply = await page.request.post(path, {
+    data: { eventType: "Download", episodeFile: { path: added } },
+  });
+  expect((await reply.json()).message).toContain("imported a new file");
+
+  await page.goto("/queue");
+  const group = page.getByRole("listitem", { name: /Group: Rule “Only English subtitles”: Sonarr import/ });
+  await expect(group.getByTestId("group-counts")).toHaveText("1 of 1 done", { timeout: 60_000 });
+  await page.goto("/activity?show=rule");
+  await expect(page.getByText(/Arrived By Itself/).first()).toBeVisible();
+  await page.screenshot({ path: "screenshots/changes-activity-rule.png", fullPage: true });
+  expect(fs.existsSync(added.replace(".mkv", " - Tailarr.mkv"))).toBe(true);
+});

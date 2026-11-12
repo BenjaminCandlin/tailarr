@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { api } from "@/lib/api";
 
 import { AppearanceCard } from "./settings/AppearanceCard";
+import { AutomationCard } from "./settings/AutomationCard";
 import { ConnectionsCard } from "./settings/ConnectionsCard";
 import { LibraryFoldersCard } from "./settings/LibraryFoldersCard";
 import { RecycleCard } from "./settings/RecycleCard";
@@ -26,6 +27,7 @@ export function SettingsPage() {
         <div className="xl:col-span-2">
           <ConnectionsCard />
         </div>
+        <AutomationCard />
         <RecycleCard />
       </div>
       <p className="mt-8 text-center text-xs text-muted-foreground">

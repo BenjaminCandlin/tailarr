@@ -294,6 +294,14 @@ export function mockBackend(handler?: Handler) {
     if (url.endsWith("/api/languages")) return json(LANGUAGES);
     if (url.endsWith("/api/settings/connections")) return json(CONNECTIONS);
     if (url.includes("/api/activity")) return json([]);
+    if (url.endsWith("/api/settings/automation"))
+      return json({
+        settle_seconds: 60,
+        watch_folders: false,
+        watch_since: null,
+        rescan_minutes: 15,
+        waiting: [],
+      });
     if (url.endsWith("/api/films")) return json(FILMS);
     if (url.endsWith("/api/films/5")) return json(FILM_DETAIL);
     if (url.includes("/api/films/5/media")) {

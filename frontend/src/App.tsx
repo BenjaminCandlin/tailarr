@@ -10,6 +10,7 @@ import { QueuePage } from "@/pages/QueuePage";
 import { RuleEditorPage } from "@/pages/RuleEditorPage";
 import { RulesPage } from "@/pages/RulesPage";
 import { SettingsPage } from "@/pages/SettingsPage";
+import { ActivityPage } from "@/pages/ActivityPage";
 import { EpisodePage } from "@/pages/EpisodePage";
 import { ShowPage } from "@/pages/ShowPage";
 import { TvPage } from "@/pages/TvPage";
@@ -28,6 +29,7 @@ export function AppRoutes() {
         <Route path="rules/new" element={<RuleEditorPage />} />
         <Route path="rules/:id" element={<RuleEditorPage />} />
         <Route path="queue" element={<QueuePage />} />
+        <Route path="activity" element={<ActivityPage />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, ListChecks, Pencil, Play, Plus, Trash2 } from "lucide-react";
+import { AlertTriangle, History, ListChecks, Pencil, Play, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router";
 
@@ -141,10 +141,18 @@ export function RulesPage() {
         title="Rules"
         description={description}
         actions={
-          <Button onClick={() => navigate("/rules/new")}>
-            <Plus aria-hidden />
-            New rule
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button asChild variant="secondary">
+              <Link to="/activity">
+                <History aria-hidden />
+                Activity log
+              </Link>
+            </Button>
+            <Button onClick={() => navigate("/rules/new")}>
+              <Plus aria-hidden />
+              New rule
+            </Button>
+          </div>
         }
       />
       {rules.isPending && <Skeleton className="h-32 w-full" />}
@@ -176,10 +184,10 @@ export function RulesPage() {
       {rules.data && rules.data.length > 0 && (
         <>
           <p className="mb-4 text-sm text-muted-foreground">
-            You can preview and run any rule on your whole library now. Rules that are{" "}
-            <span className="font-medium text-foreground">on</span> will also run by themselves for
-            new files once automatic triggers arrive (the next update). Original files are only
-            changed by rules that say so.
+            Rules that are <span className="font-medium text-foreground">on</span> run by themselves
+            when Radarr or Sonarr report a new or upgraded file (once it has finished copying), and
+            look at each file only once. You can also preview and run any rule on your whole library
+            now. Original files are only changed by rules that say so.
           </p>
           <ul className="flex flex-col gap-3" aria-label="Rules">
             {rules.data.map((rule) => (
