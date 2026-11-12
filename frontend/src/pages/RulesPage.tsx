@@ -165,6 +165,8 @@ export function RulesPage() {
               <Button
                 key={example.label}
                 variant="secondary"
+                // Long labels wrap on narrow phones instead of sticking out sideways.
+                className="h-auto min-h-11 max-w-full py-2 text-center whitespace-normal"
                 onClick={() => navigate(`/rules/new?example=${index}`)}
               >
                 {example.label}
