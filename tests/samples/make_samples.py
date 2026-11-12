@@ -19,6 +19,7 @@ made in OUTPUT/data:
     data/media/movies/<Film (Year)>/<Film (Year)>.mkv
     data/media/tv/<Show>/Season 01/<Show> - S01E01 - <Title>.mkv
     data/torrents/movies/<release>.mkv   (hardlink to one of the films)
+    data/torrents/tv/<release>.mkv       (hardlink to one of the episodes)
 
 The film folders also include poster artwork, TRaSH-style "{tmdb-...}" folder
 names, a Tailarr "- HDR10" copy, a non-MKV film, an empty folder and a
@@ -190,7 +191,13 @@ LIBRARY: tuple[tuple[str, str], ...] = (
     ("sdr_2997", "media/tv/Test Show/Season 01/Test Show - S01E01 - Pilot.mkv"),
     ("sdr_2997", "media/tv/Test Show/Season 01/Test Show - S01E02 - The Second One.mkv"),
     ("hdr10plus", "media/tv/Test Show/Season 02/Test Show - S02E01 - Brighter.mkv"),
+    ("sdr_multi", "media/tv/Test Show/Season 01/Test Show - S01E03 - Many Voices.mkv"),
+    ("sdr_2997", "media/tv/Test Show/Specials/Test Show - S00E01 - Behind the Scenes.mkv"),
     ("dv_p8", "media/tv/Another Show (2022)/Season 01/Another Show (2022) - S01E01 - Start.mkv"),
+    ("dv_p8", "media/tv/Another Show (2022)/Season 01/Another Show (2022) - S01E02 - Middle.mkv"),
+    ("dv_p5", "media/tv/Another Show (2022)/Season 01/Another Show (2022) - S01E03 - End.mkv"),
+    # An HDR10 copy Tailarr made earlier, next to its episode.
+    ("hdr10", "media/tv/Another Show (2022)/Season 01/Another Show (2022) - S01E01 - Start - HDR10.mkv"),
 )
 # Poster / backdrop artwork: (relative path, top colour, bottom colour).
 ARTWORK: tuple[tuple[str, str, str], ...] = (
@@ -198,6 +205,8 @@ ARTWORK: tuple[tuple[str, str, str], ...] = (
     ("media/movies/Colour Test (2023)/fanart.jpg", "0x134e4a", "0x0b1220"),
     ("media/movies/Bright Lights (2019)/folder.jpg", "0xb45309", "0x1f2937"),
     ("media/movies/The Long Weekend (1999) {tmdb-10001}/poster.png", "0x1d4ed8", "0x0f172a"),
+    ("media/tv/Another Show (2022)/poster.jpg", "0x7c3aed", "0x111827"),
+    ("media/tv/Another Show (2022)/fanart.jpg", "0x4c1d95", "0x0b1220"),
 )
 # Other things found in real film folders: (relative path, kind).
 EXTRAS: tuple[tuple[str, str], ...] = (
@@ -210,6 +219,11 @@ EXTRAS: tuple[tuple[str, str], ...] = (
 HARDLINKED = (
     "media/movies/Colour Test (2023)/Colour Test (2023) WEBDL-2160p DV HDR10.mkv",
     "torrents/movies/Colour.Test.2023.2160p.WEB-DL.DV.HDR10.mkv",
+)
+# An episode that is still seeding too.
+HARDLINKED_EPISODE = (
+    "media/tv/Another Show (2022)/Season 01/Another Show (2022) - S01E02 - Middle.mkv",
+    "torrents/tv/Another.Show.2022.S01E02.2160p.WEB-DL.DV.mkv",
 )
 
 
@@ -537,9 +551,10 @@ def build_all(output: Path) -> dict[str, Path]:
         target = data / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(built[sample_name], target)
-    seeding = data / HARDLINKED[1]
-    seeding.parent.mkdir(parents=True, exist_ok=True)
-    os.link(data / HARDLINKED[0], seeding)
+    for original, seeding_path in (HARDLINKED, HARDLINKED_EPISODE):
+        seeding = data / seeding_path
+        seeding.parent.mkdir(parents=True, exist_ok=True)
+        os.link(data / original, seeding)
 
     art = output / "artwork"
     art.mkdir(exist_ok=True)

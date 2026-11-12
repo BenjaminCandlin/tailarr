@@ -11,12 +11,17 @@ const PAGES = [
 const isPhone = (page: Page) => (page.viewportSize()?.width ?? 0) < 768;
 
 async function setTheme(page: Page, theme: "dark" | "light") {
-  await page.addInitScript((t) => localStorage.setItem("tailarr-theme", t), theme);
+  await page.addInitScript(
+    (t) => localStorage.setItem("tailarr-theme", t),
+    theme,
+  );
 }
 
 async function expectNoSideways(page: Page) {
   const overflow = await page.evaluate(
-    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    () =>
+      document.documentElement.scrollWidth -
+      document.documentElement.clientWidth,
   );
   expect(overflow, "page should not scroll sideways").toBeLessThanOrEqual(0);
 }
@@ -26,10 +31,14 @@ for (const theme of ["dark", "light"] as const) {
     test(`${heading} page in ${theme} theme`, async ({ page }, testInfo) => {
       await setTheme(page, theme);
       await page.goto(path);
-      await expect(page.getByRole("heading", { level: 1, name: heading })).toBeVisible();
+      await expect(
+        page.getByRole("heading", { level: 1, name: heading }),
+      ).toBeVisible();
       if (path === "/settings")
         await expect(page.getByText(/All good|Needs attention/)).toBeVisible();
-      await expect(page.locator("html")).toHaveClass(theme === "dark" ? /dark/ : /^(?!.*dark)/);
+      await expect(page.locator("html")).toHaveClass(
+        theme === "dark" ? /dark/ : /^(?!.*dark)/,
+      );
       await expectNoSideways(page);
       await page.screenshot({
         path: `screenshots/${testInfo.project.name}-${theme}-${heading.toLowerCase()}.png`,
@@ -61,10 +70,14 @@ test("the right navigation for the screen size", async ({ page }) => {
 test("navigating between sections", async ({ page }) => {
   await page.goto("/");
   await expect(page).toHaveURL(/\/films$/);
-  const nav = page.getByRole("navigation", { name: "Main" }).locator("visible=true");
+  const nav = page
+    .getByRole("navigation", { name: "Main" })
+    .locator("visible=true");
   for (const { heading } of PAGES) {
     await nav.getByRole("link", { name: heading }).click();
-    await expect(page.getByRole("heading", { level: 1, name: heading })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { level: 1, name: heading }),
+    ).toBeVisible();
   }
 });
 
@@ -75,7 +88,10 @@ test("theme choice is remembered after reloading", async ({ page }) => {
   await expect(page.locator("html")).not.toHaveClass(/dark/);
   await page.reload();
   await expect(page.locator("html")).not.toHaveClass(/dark/);
-  await expect(page.getByRole("radio", { name: /light/i })).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByRole("radio", { name: /light/i })).toHaveAttribute(
+    "aria-checked",
+    "true",
+  );
 });
 
 test("system check finds the sample library folders", async ({ page }) => {

@@ -111,3 +111,47 @@ def language_name(code: str | None, ietf: str | None = None) -> str:
         base = "und"
     name = names.get(base, base)
     return f"{name} ({region})" if region else name
+
+
+@cache
+def _two_letter() -> dict[str, str]:
+    codes: dict[str, str] = {}
+    for line in _DATA.read_text(encoding="utf-8").splitlines():
+        if not line or line.startswith("#"):
+            continue
+        code2, code1, _ = line.split("\t")
+        if code1:
+            codes.setdefault(code1, code2)
+    return codes
+
+
+def normalize_language(code: str | None) -> str:
+    """One code per language, so "fra", "fre" and "fr" all match: 'fra' -> 'fre', 'en' -> 'eng'.
+
+    Region parts are ignored ('pt-BR' -> 'por'); empty codes become 'und' (unknown).
+    """
+    base = (code or "").strip().lower().replace("_", "-").split("-")[0]
+    if not base:
+        return "und"
+    if len(base) == 2:
+        base = _two_letter().get(base, base)
+    return _TERMINOLOGY_CODES.get(base, base)
+
+
+# Shown first when choosing languages (the rest follow alphabetically).
+COMMON_LANGUAGES = (
+    "eng", "fre", "ger", "spa", "ita", "por", "dut", "swe", "nor", "dan", "fin", "pol",
+    "rus", "jpn", "kor", "chi", "hin", "ara", "tur", "gre", "heb", "cze", "hun", "tha",
+)  # fmt: skip
+
+
+def language_choices() -> list[tuple[str, str]]:
+    """(code, name) pairs for language pickers: common languages first, then all others."""
+    names = _names()
+    common = [(code, names[code]) for code in COMMON_LANGUAGES]
+    seen = set(COMMON_LANGUAGES) | set(_TERMINOLOGY_CODES) | {"und", "zxx", "mul", "mis"}
+    others = sorted(
+        ((code, name) for code, name in names.items() if len(code) == 3 and code not in seen),
+        key=lambda pair: pair[1].casefold(),
+    )
+    return common + others

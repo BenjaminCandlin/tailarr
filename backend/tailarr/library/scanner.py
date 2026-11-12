@@ -227,17 +227,24 @@ class ScanStatus:
     error: str | None = None
 
 
-class FilmScanner:
-    """Runs one scan at a time in the background and remembers how the last one went."""
+class LibraryScanner:
+    """Runs one scan at a time in the background and remembers how the last one went.
+
+    Subclasses say which setting key holds the status and how to find and save items.
+    """
+
+    status_key = ""
+    label = "library"
+    missing_message = "Tailarr couldn't read your library folder ({error})."
 
     def __init__(
         self,
         engine: Engine,
-        films_root: Callable[[], Path],
+        root: Callable[[], Path],
         on_scanned: Callable[[], object] | None = None,
     ) -> None:
         self._engine = engine
-        self._films_root = films_root
+        self._films_root = root
         self._on_scanned = on_scanned  # called after each successful scan
         self._lock = threading.Lock()
         self._running = False
@@ -247,7 +254,7 @@ class FilmScanner:
     # -- status ---------------------------------------------------------------
     def status(self) -> ScanStatus:
         with Session(self._engine) as session:
-            row = session.get(Setting, SCAN_STATUS_KEY)
+            row = session.get(Setting, self.status_key)
         saved = json.loads(row.value) if row else {}
         status = ScanStatus(**{k: v for k, v in saved.items() if k in ScanStatus.__annotations__})
         with self._lock:
@@ -260,7 +267,7 @@ class FilmScanner:
         data = asdict(status)
         data["running"] = False
         with Session(self._engine) as session:
-            session.merge(Setting(key=SCAN_STATUS_KEY, value=json.dumps(data)))
+            session.merge(Setting(key=self.status_key, value=json.dumps(data)))
             session.commit()
 
     def is_stale(self) -> bool:
@@ -297,7 +304,9 @@ class FilmScanner:
                 return False
             self._running = True
             self._started_at = time.time()
-            self._thread = threading.Thread(target=self._background, name="film-scan", daemon=True)
+            self._thread = threading.Thread(
+                target=self._background, name=f"{self.label}-scan", daemon=True
+            )
             self._thread.start()
         return True
 
@@ -313,25 +322,38 @@ class FilmScanner:
         try:
             self._scan()
         except Exception:  # never let a scan crash the app
-            log.exception("Film scan failed")
+            log.exception("%s scan failed", self.label)
         finally:
             with self._lock:
                 self._running = False
+
+    def find_and_save(self, session: Session, root: Path) -> int:
+        raise NotImplementedError
 
     def _scan(self) -> ScanStatus:
         root = Path(self._films_root())
         status = ScanStatus(started_at=self._started_at, root=str(root))
         try:
-            found = find_films(root)
             with Session(self._engine) as session:
-                status.film_count = save_films(session, found)
+                status.film_count = self.find_and_save(session, root)
         except LibraryFolderMissingError as error:
             status.error = str(error)
         except OSError as error:
-            status.error = f"Tailarr couldn't read your Films folder ({error.strerror or error})."
+            status.error = self.missing_message.format(error=error.strerror or error)
         status.finished_at = time.time()
         self._save_status(status)
-        log.info("Film scan of %s: %s films, error=%s", root, status.film_count, status.error)
+        log.info(
+            "%s scan of %s: %s found, error=%s", self.label, root, status.film_count, status.error
+        )
         if status.error is None and self._on_scanned is not None:
             self._on_scanned()
         return status
+
+
+class FilmScanner(LibraryScanner):
+    status_key = SCAN_STATUS_KEY
+    label = "film"
+    missing_message = "Tailarr couldn't read your Films folder ({error})."
+
+    def find_and_save(self, session: Session, root: Path) -> int:
+        return save_films(session, find_films(root))

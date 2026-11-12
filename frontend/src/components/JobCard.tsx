@@ -111,9 +111,11 @@ export function JobCard({ job }: { job: Job }) {
             <Badge tone={look.tone}>{STATUS_LABELS[job.status]}</Badge>
           </div>
           <p className="text-sm [overflow-wrap:anywhere]">
-            {job.film_id !== null ? (
+            {job.film_id !== null || job.episode_id !== null ? (
               <Link
-                to={`/films/${job.film_id}`}
+                to={
+                  job.film_id !== null ? `/films/${job.film_id}` : `/tv/episodes/${job.episode_id}`
+                }
                 className="font-medium text-primary underline-offset-4 hover:underline"
               >
                 {job.subject}

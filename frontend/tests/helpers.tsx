@@ -5,6 +5,8 @@ import { vi } from "vitest";
 
 import { AppRoutes, makeQueryClient } from "@/App";
 import type {
+  Episode,
+  EpisodeDetail,
   Job,
   Film,
   FilmDetail,
@@ -13,6 +15,8 @@ import type {
   LibrarySettings,
   Media,
   MediaSummary,
+  ShowDetail,
+  ShowList,
   Track,
 } from "@/lib/api";
 import { ThemeProvider } from "@/lib/theme";
@@ -284,7 +288,9 @@ export function mockBackend(handler?: Handler) {
     if (url.endsWith("/api/settings/recycle"))
       return json({ keep_days: 30, file_count: 0, total_size: 0 });
     if (url.endsWith("/api/jobs/counts")) return json({ running: 0, queued: 0 });
-    if (url.endsWith("/api/jobs")) return json({ jobs: [], counts: { running: 0, queued: 0 } });
+    if (url.endsWith("/api/jobs"))
+      return json({ jobs: [], counts: { running: 0, queued: 0 }, groups: [] });
+    if (url.endsWith("/api/languages")) return json(LANGUAGES);
     if (url.endsWith("/api/films")) return json(FILMS);
     if (url.endsWith("/api/films/5")) return json(FILM_DETAIL);
     if (url.includes("/api/films/5/media")) {
@@ -315,6 +321,7 @@ export function job(extra: Partial<Job> = {}): Job {
     subject: "Colour Test (2023)",
     file_name: MEDIA.file,
     film_id: 5,
+    episode_id: null,
     group_id: null,
     status: "queued",
     step: "",
@@ -333,3 +340,113 @@ export function job(extra: Partial<Job> = {}): Job {
     ...extra,
   };
 }
+
+export const LANGUAGES = [
+  { code: "eng", name: "English", common: true },
+  { code: "fre", name: "French", common: true },
+  { code: "spa", name: "Spanish", common: true },
+  { code: "wel", name: "Welsh", common: false },
+];
+
+const READ_DV: MediaSummary = {
+  read: true,
+  error: false,
+  hdr: ["Dolby Vision", "HDR10"],
+  dv_profile: "8.1",
+  resolution: "4K",
+};
+const READ_SDR: MediaSummary = {
+  read: true,
+  error: false,
+  hdr: [],
+  dv_profile: null,
+  resolution: "1080p",
+};
+
+export const SHOWS: ShowList = {
+  root: "/data/media/tv",
+  scan: {
+    running: false,
+    started_at: "2026-11-11T10:00:00Z",
+    finished_at: "2026-11-11T10:00:01Z",
+    film_count: 2,
+    error: null,
+  },
+  reading: { running: false, done: 0, total: 0 },
+  shows: [
+    {
+      id: 2,
+      title: "Another Show",
+      year: 2022,
+      folder_name: "Another Show (2022)",
+      poster_url: null,
+      size: 3_000_000_000,
+      added_at: "2026-11-10T10:00:00Z",
+      season_count: 1,
+      episode_count: 3,
+      media: { ...READ_DV, dv_profile: null },
+      dv_episodes: 3,
+    },
+    {
+      id: 1,
+      title: "Test Show",
+      year: null,
+      folder_name: "Test Show",
+      poster_url: null,
+      size: 1_000_000_000,
+      added_at: "2026-11-09T10:00:00Z",
+      season_count: 2,
+      episode_count: 4,
+      media: READ_SDR,
+      dv_episodes: 0,
+    },
+  ],
+};
+
+function episode(id: number, label: string, title: string, media = READ_DV): Episode {
+  return {
+    id,
+    season: 1,
+    episode: id,
+    episode_end: null,
+    label,
+    title,
+    main_file: `Another Show (2022) - ${label} - ${title}.mkv`,
+    is_mkv: true,
+    size: 1_000_000_000,
+    added_at: "2026-11-10T10:00:00Z",
+    file_count: 1,
+    has_copy: false,
+    media,
+  };
+}
+
+export const SHOW_DETAIL: ShowDetail = {
+  ...SHOWS.shows[0],
+  folder: "/data/media/tv/Another Show (2022)",
+  backdrop_url: null,
+  tvdb_id: null,
+  seasons: [
+    {
+      season: 1,
+      label: "Season 1",
+      size: 3_000_000_000,
+      episodes: [
+        { ...episode(11, "S01E01", "Start"), has_copy: true },
+        episode(12, "S01E02", "Middle"),
+        episode(13, "S01E03", "End"),
+      ],
+    },
+  ],
+};
+
+export const EPISODE_DETAIL: EpisodeDetail = {
+  ...episode(12, "S01E02", "Middle"),
+  show_id: 2,
+  show_title: "Another Show",
+  show_year: 2022,
+  poster_url: null,
+  backdrop_url: null,
+  folder: "/data/media/tv/Another Show (2022)/Season 01",
+  files: [{ ...FILM_DETAIL.files[0], name: "Another Show (2022) - S01E02 - Middle.mkv" }],
+};

@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from sqlmodel import Session, col, func, select
 
 from ..jobs.engine import JobQueue
-from ..jobs.models import ACTIVE, Job, JobStatus
+from ..jobs.models import ACTIVE, Job, JobGroup, JobStatus
 from .deps import get_session
 
 router = APIRouter(prefix="/api/jobs")
@@ -30,6 +30,7 @@ class JobOut(BaseModel):
     subject: str
     file_name: str
     film_id: int | None
+    episode_id: int | None
     group_id: str | None
     status: JobStatus
     step: str
@@ -52,9 +53,16 @@ class JobCountsOut(BaseModel):
     queued: int
 
 
+class JobGroupOut(BaseModel):
+    id: str
+    title: str  # e.g. "Make a copy without Dolby Vision: Test Show, Season 1"
+    created_at: datetime
+
+
 class JobListOut(BaseModel):
     jobs: list[JobOut]
     counts: JobCountsOut
+    groups: list[JobGroupOut]  # the groups the listed jobs belong to
 
 
 def _time(seconds: float | None) -> datetime | None:
@@ -70,6 +78,7 @@ def job_out(job: Job) -> JobOut:
         subject=job.subject,
         file_name=job.path.rsplit("/", 1)[-1],
         film_id=job.film_id,
+        episode_id=job.episode_id,
         group_id=job.group_id,
         status=JobStatus(job.status),
         step=job.step,
@@ -112,7 +121,21 @@ def list_jobs(session: Annotated[Session, Depends(get_session)]) -> JobListOut:
         .order_by(col(Job.finished_at).desc(), col(Job.id).desc())
         .limit(HISTORY_LIMIT)
     ).all()
-    return JobListOut(jobs=[job_out(j) for j in [*active, *history]], counts=_counts(session))
+    jobs = [*active, *history]
+    group_ids = {j.group_id for j in jobs if j.group_id}
+    groups = (
+        session.exec(select(JobGroup).where(col(JobGroup.id).in_(list(group_ids)))).all()
+        if group_ids
+        else []
+    )
+    return JobListOut(
+        jobs=[job_out(j) for j in jobs],
+        counts=_counts(session),
+        groups=[
+            JobGroupOut(id=g.id, title=g.title, created_at=_time(g.created_at))  # type: ignore[arg-type]
+            for g in groups
+        ],
+    )
 
 
 @router.get("/counts", response_model=JobCountsOut)
@@ -145,6 +168,18 @@ def cancel_job(job_id: int, queue: Annotated[JobQueue, Depends(get_queue)]) -> J
     cancelled = queue.cancel(job_id)
     assert cancelled is not None
     return job_out(cancelled)
+
+
+class GroupCancelledOut(BaseModel):
+    cancelled: int
+
+
+@router.post("/groups/{group_id}/cancel", response_model=GroupCancelledOut)
+def cancel_group(
+    group_id: str, queue: Annotated[JobQueue, Depends(get_queue)]
+) -> GroupCancelledOut:
+    """Cancel all the waiting jobs of a group (and stop its running one, if it safely can)."""
+    return GroupCancelledOut(cancelled=queue.cancel_group(group_id))
 
 
 class ClearedOut(BaseModel):

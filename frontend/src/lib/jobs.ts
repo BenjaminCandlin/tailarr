@@ -1,5 +1,5 @@
 /** Following jobs in the queue. */
-import { useQuery } from "@tanstack/react-query";
+import { type QueryClient, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
 import { api, type Job, type JobStatus } from "@/lib/api";
@@ -65,4 +65,11 @@ export function stepText(job: Job): string {
   if (!job.step) return "Starting…";
   const of = job.step_count > 1 ? ` (step ${job.step_number} of ${job.step_count})` : "";
   return `${job.step}…${of}`;
+}
+
+/** After a job changed files: show the films, shows and episodes as they are now. */
+export function refreshLibrary(queryClient: QueryClient) {
+  for (const key of ["films", "tv", "episodes"]) {
+    void queryClient.invalidateQueries({ queryKey: [key] });
+  }
 }

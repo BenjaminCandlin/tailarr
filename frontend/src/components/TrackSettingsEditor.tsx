@@ -11,12 +11,14 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   api,
+  type ItemRef,
   type Job,
   type RemoveTracksPreview,
   type Track,
   type TrackChange,
   type TrackSettingsPreview,
 } from "@/lib/api";
+import { refreshLibrary } from "@/lib/jobs";
 import { formatSize, plural } from "@/lib/format";
 
 type Draft = Record<string, Partial<TrackValues>>;
@@ -130,12 +132,12 @@ type Started = { id: number; kind: "settings" | "copy" };
  * any setting changes applied to the copy) and leaves the original alone.
  */
 export function TrackSettingsEditor({
-  filmId,
+  item,
   file,
   tracks,
   onOpenFile,
 }: {
-  filmId: number;
+  item: ItemRef;
   file: string;
   tracks: Track[];
   /** Show another of the film's files (e.g. the new copy). */
@@ -156,14 +158,14 @@ export function TrackSettingsEditor({
   const changes = changesFrom(tracks, draft).filter((c) => !removed.includes(c.uid));
 
   const checkSettings = useMutation({
-    mutationFn: () => api.previewTrackSettings(filmId, { file, changes }),
+    mutationFn: () => api.previewTrackSettings(item, { file, changes }),
     onSuccess: (data) => {
       setUnderstood(false);
       setSettingsPreview(data);
     },
   });
   const checkCopy = useMutation({
-    mutationFn: () => api.previewRemoveTracks(filmId, { file, remove: removed, changes }),
+    mutationFn: () => api.previewRemoveTracks(item, { file, remove: removed, changes }),
     onSuccess: (data) => {
       setOverwrite(data.updates_copy);
       setCopyPreview(data);
@@ -180,7 +182,7 @@ export function TrackSettingsEditor({
   }
   const saveSettings = useMutation({
     mutationFn: () =>
-      api.changeTrackSettings(filmId, {
+      api.changeTrackSettings(item, {
         file,
         changes,
         confirmed: true,
@@ -190,7 +192,7 @@ export function TrackSettingsEditor({
   });
   const saveCopy = useMutation({
     mutationFn: () =>
-      api.removeTracks(filmId, { file, remove: removed, changes, confirmed: true, overwrite }),
+      api.removeTracks(item, { file, remove: removed, changes, confirmed: true, overwrite }),
     onSuccess: (job) => begin(job, "copy"),
   });
 
@@ -235,7 +237,7 @@ export function TrackSettingsEditor({
       setRemoved([]);
     }
     // Show the file(s) as they are now (also in the film list and the film's file list).
-    void queryClient.invalidateQueries({ queryKey: ["films"] });
+    refreshLibrary(queryClient);
     void queryClient.invalidateQueries({ queryKey: ["jobs"] });
   };
 
@@ -398,7 +400,7 @@ export function TrackSettingsEditor({
 
       {replacing && (
         <ReplaceOriginalDialog
-          filmId={filmId}
+          item={item}
           copyFile={replacing}
           open
           onOpenChange={(open) => !open && setReplacing(null)}

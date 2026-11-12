@@ -3,12 +3,17 @@ import { expect, test, type Page } from "@playwright/test";
 const isPhone = (page: Page) => (page.viewportSize()?.width ?? 0) < 768;
 
 async function setTheme(page: Page, theme: "dark" | "light") {
-  await page.addInitScript((t) => localStorage.setItem("tailarr-theme", t), theme);
+  await page.addInitScript(
+    (t) => localStorage.setItem("tailarr-theme", t),
+    theme,
+  );
 }
 
 async function expectNoSideways(page: Page) {
   const overflow = await page.evaluate(
-    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    () =>
+      document.documentElement.scrollWidth -
+      document.documentElement.clientWidth,
   );
   expect(overflow, "page should not scroll sideways").toBeLessThanOrEqual(0);
 }
@@ -30,7 +35,9 @@ async function openFilm(page: Page, title: string) {
     )
     .toBe(true);
   await page.goto(`/films/${id}`);
-  await expect(page.getByRole("heading", { level: 1, name: new RegExp(title) })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { level: 1, name: new RegExp(title) }),
+  ).toBeVisible();
   return id;
 }
 
@@ -50,7 +57,9 @@ test("a hardlinked (seeding) file needs 'I understand'", async ({ page }) => {
   await page.getByRole("button", { name: "Save track changes" }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog).toContainText("This file is also in your downloads");
-  const confirm = dialog.getByRole("button", { name: "Change the original file" });
+  const confirm = dialog.getByRole("button", {
+    name: "Change the original file",
+  });
   await expect(confirm).toBeDisabled();
   await dialog.getByRole("checkbox", { name: /I understand/ }).click();
   await expect(confirm).toBeEnabled();
@@ -58,7 +67,9 @@ test("a hardlinked (seeding) file needs 'I understand'", async ({ page }) => {
   await dialog.getByRole("button", { name: "Cancel" }).click();
   await expect(dialog).toHaveCount(0);
   await expect(page.getByTestId("save-bar")).toBeVisible();
-  await expect((await page.request.get("/api/jobs")).json()).resolves.toMatchObject({
+  await expect(
+    (await page.request.get("/api/jobs")).json(),
+  ).resolves.toMatchObject({
     counts: { running: 0 },
   });
 });
@@ -89,23 +100,38 @@ test("the summary is a sheet from the bottom on phones", async ({ page }) => {
 
 /** Starts a harmless real job (renames an audio track on a film no other test checks). */
 async function finishedJob(page: Page, label: string) {
-  const films: FilmSummary[] = (await (await page.request.get("/api/films")).json()).films;
+  const films: FilmSummary[] = (
+    await (await page.request.get("/api/films")).json()
+  ).films;
   const film = films.find((f) => f.title === "Blu-ray Night")!;
   const detail = await (await page.request.get(`/api/films/${film.id}`)).json();
   const file = detail.main_file;
   const media = await (
-    await page.request.get(`/api/films/${film.id}/media?file=${encodeURIComponent(file)}`)
+    await page.request.get(
+      `/api/films/${film.id}/media?file=${encodeURIComponent(file)}`,
+    )
   ).json();
   const audio = media.tracks.find((t: { type: string }) => t.type === "audio");
-  const response = await page.request.post(`/api/films/${film.id}/track-settings`, {
-    data: { file, confirmed: true, changes: [{ uid: audio.uid, name: `English (${label})` }] },
-  });
+  const response = await page.request.post(
+    `/api/films/${film.id}/track-settings`,
+    {
+      data: {
+        file,
+        confirmed: true,
+        changes: [{ uid: audio.uid, name: `English (${label})` }],
+      },
+    },
+  );
   expect(response.status()).toBe(202);
   const job = await response.json();
   await expect
-    .poll(async () => (await (await page.request.get(`/api/jobs/${job.id}`)).json()).status, {
-      timeout: 30_000,
-    })
+    .poll(
+      async () =>
+        (await (await page.request.get(`/api/jobs/${job.id}`)).json()).status,
+      {
+        timeout: 30_000,
+      },
+    )
     .toBe("done");
 }
 
@@ -119,18 +145,29 @@ for (const theme of ["dark", "light"] as const) {
     await forcedSwitch(page, 3).click();
     await expect(page.getByTestId("save-bar")).toBeVisible();
     await expectNoSideways(page);
-    await page.screenshot({ path: `screenshots/${name}-track-settings.png`, fullPage: true });
+    await page.screenshot({
+      path: `screenshots/${name}-track-settings.png`,
+      fullPage: true,
+    });
 
     await page.getByRole("button", { name: "Save track changes" }).click();
-    await expect(page.getByRole("dialog")).toContainText("This file is also in your downloads");
+    await expect(page.getByRole("dialog")).toContainText(
+      "This file is also in your downloads",
+    );
     await page.waitForTimeout(300); // let the sheet finish sliding in
     await page.screenshot({ path: `screenshots/${name}-confirm-summary.png` });
-    await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: "Cancel" })
+      .click();
 
     await finishedJob(page, name);
     await page.goto("/queue");
     await expect(page.getByRole("region", { name: /Finished/ })).toBeVisible();
     await expectNoSideways(page);
-    await page.screenshot({ path: `screenshots/${name}-queue.png`, fullPage: true });
+    await page.screenshot({
+      path: `screenshots/${name}-queue.png`,
+      fullPage: true,
+    });
   });
 }

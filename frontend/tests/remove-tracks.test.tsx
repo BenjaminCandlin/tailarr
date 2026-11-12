@@ -10,7 +10,6 @@ import { FILM_DETAIL, MEDIA, job, json, mockBackend, renderApp } from "./helpers
 const COPY = "Colour Test (2023) WEBDL-2160p DV HDR10 - Tailarr.mkv";
 
 const PREVIEW: RemoveTracksPreview = {
-  film_id: 5,
   file: MEDIA.file,
   new_file: COPY,
   exists: false,
@@ -25,7 +24,6 @@ const PREVIEW: RemoveTracksPreview = {
 };
 
 const REPLACE: ReplaceOriginalPreview = {
-  film_id: 5,
   original: MEDIA.file,
   original_size: 4 * 1024 ** 3,
   copy_file: COPY,

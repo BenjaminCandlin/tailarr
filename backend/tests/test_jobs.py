@@ -275,7 +275,11 @@ def test_disk_space_helpers(tmp_path: Path) -> None:
 
 def test_jobs_api(client: TestClient) -> None:
     queue: JobQueue = client.app.state.job_queue  # type: ignore[attr-defined]
-    assert client.get("/api/jobs").json() == {"jobs": [], "counts": {"running": 0, "queued": 0}}
+    assert client.get("/api/jobs").json() == {
+        "jobs": [],
+        "counts": {"running": 0, "queued": 0},
+        "groups": [],
+    }
     job = queue.submit(
         "track_settings",
         title="Change track settings",

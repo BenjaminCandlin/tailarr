@@ -91,7 +91,8 @@ def test_library_tree_follows_trash_layout(samples_dir: Path) -> None:
     films = sorted(p.name for p in (data / "media" / "movies").iterdir())
     assert "Colour Test (2023)" in films
     episodes = list((data / "media" / "tv" / "Test Show").glob("Season */*.mkv"))
-    assert len(episodes) == 3
+    assert len(episodes) == 4
+    assert len(list((data / "media" / "tv" / "Test Show" / "Specials").glob("*.mkv"))) == 1
     assert (data / "torrents" / "movies").is_dir()
 
 
@@ -101,3 +102,5 @@ def test_seeding_file_is_hardlinked(samples_dir: Path) -> None:
     seeding = data / make_samples.HARDLINKED[1]
     assert film.stat().st_nlink == 2
     assert film.stat().st_ino == seeding.stat().st_ino
+    episode = data / make_samples.HARDLINKED_EPISODE[0]
+    assert episode.stat().st_ino == (data / make_samples.HARDLINKED_EPISODE[1]).stat().st_ino
