@@ -165,6 +165,10 @@ class ReplaceOriginalPreviewOut(BaseModel):
 
 class Hdr10CopyIn(BaseModel):
     file: str
+    # Also change tracks in the same copy (one pass instead of two): tracks to leave out,
+    # and new settings for the kept tracks.
+    remove: list[str] = []
+    changes: list[TrackChange] = []
 
 
 class Hdr10CopyConfirmIn(Hdr10CopyIn):
@@ -186,7 +190,10 @@ class Hdr10CopyPreviewOut(BaseModel):
     dv_profile: str
     blu_ray_layers: bool  # profile 7 with an enhancement layer, which is left out too
     result: list[str]  # what players show the copy as, e.g. ["HDR10"], ["HDR10+", "HDR10"]
-    kept: list[str]  # the other tracks, all kept
+    kept: list[str]  # the other tracks that are kept
+    removed: list[str] = []  # tracks left out of the copy too
+    settings: list[SettingChangeOut] = []  # setting changes in the copy
+    warnings: list[str] = []
     chapters: int
     attachments: int
     uses_work_folder: bool
@@ -456,9 +463,9 @@ def make_router(prefix: str, load_item: ItemLoader) -> APIRouter:
     # -- make a copy without Dolby Vision -----------------------------------------------
 
     def hdr10_preview(
-        session: Session, config: AppConfig, reader: MediaReader, item: Item, file_name: str
+        session: Session, config: AppConfig, reader: MediaReader, item: Item, body: Hdr10CopyIn
     ) -> tuple[Hdr10CopyPreviewOut, LibraryFile]:
-        file = _mkv_file(item, file_name)
+        file = _mkv_file(item, body.file)
         details, stat = _details(session, reader, item, file)
         if not details.hdr_checked:
             raise HTTPException(
@@ -467,9 +474,12 @@ def make_router(prefix: str, load_item: ItemLoader) -> APIRouter:
                 "Vision is stored. Try “Try again” on the page.",
             )
         try:
-            plan = hdr10_copy.plan_hdr10(details)
-        except hdr10_copy.Hdr10Refused as error:
+            plan = hdr10_copy.plan_hdr10(details, body.remove, body.changes)
+        except (hdr10_copy.Hdr10Refused, remove_tracks.CopyRefusedError) as error:
             raise HTTPException(status_code=400, detail=str(error)) from error
+        except TracksChangedError as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+        tracks = plan.tracks
         new_name = hdr10_copy.output_name(file.name)
         new_path = Path(file.path).with_name(new_name)
         exists = new_path.exists()
@@ -488,11 +498,17 @@ def make_router(prefix: str, load_item: ItemLoader) -> APIRouter:
             dv_profile=plan.profile,
             blu_ray_layers=details.hdr.dv_dual_layer,
             result=plan.expected_formats,
-            kept=[
-                remove_tracks.describe_track(t, details)
-                for t in plan.kept_others
-                if t not in plan.dropped
-            ],
+            kept=[remove_tracks.describe_track(t, details) for t in plan.kept_others],
+            removed=[remove_tracks.describe_track(t, details) for t in tracks.removed]
+            if tracks
+            else [],
+            settings=[
+                SettingChangeOut(label=remove_tracks.track_label(t, details), changes=lines)
+                for t, lines in tracks.setting_changes()
+            ]
+            if tracks
+            else [],
+            warnings=tracks.warnings if tracks else [],
             chapters=details.chapters,
             attachments=len(details.attachments),
             uses_work_folder=work is not None,
@@ -509,7 +525,7 @@ def make_router(prefix: str, load_item: ItemLoader) -> APIRouter:
         item: ItemDep, body: Hdr10CopyIn, config: ConfigDep, session: SessionDep, reader: ReaderDep
     ) -> Hdr10CopyPreviewOut:
         """The summary to confirm before making a copy without Dolby Vision. Changes nothing."""
-        return hdr10_preview(session, config, reader, item, body.file)[0]
+        return hdr10_preview(session, config, reader, item, body)[0]
 
     @router.post("/{item_id}/hdr10-copy", response_model=JobOut, status_code=202)
     def start_hdr10_copy(
@@ -522,7 +538,7 @@ def make_router(prefix: str, load_item: ItemLoader) -> APIRouter:
     ) -> JobOut:
         if not body.confirmed:
             raise HTTPException(status_code=400, detail="Please confirm the summary first.")
-        preview, file = hdr10_preview(session, config, reader, item, body.file)
+        preview, file = hdr10_preview(session, config, reader, item, body)
         if preview.exists and not body.overwrite:
             raise HTTPException(
                 status_code=409,
@@ -540,7 +556,11 @@ def make_router(prefix: str, load_item: ItemLoader) -> APIRouter:
             title=hdr10_copy.TITLE,
             subject=item.subject,
             path=file.path,
-            params={"overwrite": body.overwrite},
+            params={
+                "overwrite": body.overwrite,
+                "remove": body.remove,
+                "changes": [c.model_dump(exclude_none=True) for c in body.changes],
+            },
             **item.job_link,
         )
         return job_out(job)

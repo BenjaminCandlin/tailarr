@@ -32,8 +32,8 @@ class LanguageChoice(BaseModel):
 
     mode: Literal["all", "only", "none"] = "all"  # "none": remove them all (subtitles only)
     languages: list[str] = []  # language codes such as "eng", kept with mode "only"
-    keep_unknown: bool = True  # keep tracks with no language set
-    keep_original: bool = True  # keep tracks marked as the original language (audio)
+    keep_unknown: bool = False  # also keep tracks with no language set
+    keep_original: bool = False  # also keep tracks marked as the original language (audio)
 
     @field_validator("languages")
     @classmethod
@@ -48,10 +48,45 @@ class LanguageChoice(BaseModel):
 
 
 class Hdr10CopyAction(BaseModel):
-    """Make a copy without Dolby Vision of every file that has it (not profile 5)."""
+    """Make a copy without Dolby Vision of every file that has it (not profile 5).
+
+    Track changes can be made in the same copy (one pass instead of two): leave out
+    audio/subtitle tracks by language, and choose the copy's default audio and subtitles.
+    """
 
     type: Literal["hdr10_copy"] = "hdr10_copy"
     overwrite: bool = False  # replace HDR10 copies Tailarr made before
+    audio: LanguageChoice = LanguageChoice()
+    subtitles: LanguageChoice = LanguageChoice()
+    remove_commentary: bool = False
+    default_audio: str | None = None  # in the copy: first audio track in this language
+    default_subtitles: Literal["keep", "off", "language"] = "keep"
+    default_subtitle_language: str | None = None
+
+    @field_validator("default_audio", "default_subtitle_language")
+    @classmethod
+    def _code(cls, value: str | None) -> str | None:
+        return normalize_language(value) if value and value.strip() else None
+
+    @model_validator(mode="after")
+    def _sensible(self) -> Hdr10CopyAction:
+        if self.audio.mode == "none":
+            raise ValueError(
+                "Every file needs at least one audio track, so audio can't be removed."
+            )
+        if self.default_subtitles == "language" and not self.default_subtitle_language:
+            raise ValueError("Choose the subtitle language to show by default.")
+        return self
+
+    @property
+    def changes_tracks(self) -> bool:
+        return (
+            self.audio.mode != "all"
+            or self.subtitles.mode != "all"
+            or self.remove_commentary
+            or self.default_audio is not None
+            or self.default_subtitles != "keep"
+        )
 
 
 class RemoveTracksAction(BaseModel):
@@ -111,10 +146,40 @@ def _languages(codes: list[str]) -> str:
     return ", ".join(names[:-1]) + " and " + names[-1]
 
 
+def _track_words(audio: LanguageChoice, subtitles: LanguageChoice, commentary: bool) -> list[str]:
+    words = []
+    if audio.mode == "only":
+        words.append(f"keeping only {_languages(audio.languages)} audio")
+    if subtitles.mode == "only":
+        words.append(f"keeping only {_languages(subtitles.languages)} subtitles")
+    if subtitles.mode == "none":
+        words.append("with no subtitles")
+    if commentary:
+        words.append("with no commentary tracks")
+    return words
+
+
+def _default_words(audio: str | None, subtitles: str, subtitle_language: str | None) -> list[str]:
+    words = []
+    if audio:
+        words.append(f"{language_name(audio)} audio as the default")
+    if subtitles == "off":
+        words.append("no subtitles shown by default")
+    elif subtitles == "language" and subtitle_language:
+        words.append(f"{language_name(subtitle_language)} subtitles as the default")
+    return words
+
+
 def describe_action(action: Hdr10CopyAction | RemoveTracksAction | DefaultTracksAction) -> str:
     """One line, e.g. 'Save copies keeping only English subtitles'."""
     if isinstance(action, Hdr10CopyAction):
-        return "Make a copy without Dolby Vision (HDR10 copy)"
+        text = "Make a copy without Dolby Vision (HDR10 copy)"
+        extras = _track_words(
+            action.audio, action.subtitles, action.remove_commentary
+        ) + _default_words(
+            action.default_audio, action.default_subtitles, action.default_subtitle_language
+        )
+        return text + (", " + ", ".join(extras) if extras else "")
     if isinstance(action, RemoveTracksAction):
         parts = []
         if action.audio.mode == "only":
@@ -160,6 +225,9 @@ class FilePlan:
     changes_original: bool = False
     hardlinked: bool = False
     new_file: str | None = None
+    is_copy: bool = False  # one of Tailarr's own copies (batch "also change copies")
+    # Worth a look before starting: e.g. no subtitles (or no audio) would be left.
+    warnings: list[str] = field(default_factory=list)
     # Space this job needs while it runs: (folder, bytes) on the film's disk, and in the
     # work folder (HDR10 copies only), plus what's left behind (the copy itself).
     space_needed: int = 0
@@ -187,6 +255,31 @@ def _keeps(choice: LanguageChoice, track: Track) -> bool:
     return bool(choice.keep_original and track.original)
 
 
+def _removals(
+    audio: LanguageChoice, subtitles: LanguageChoice, commentary: bool, details: MediaDetails
+) -> list[Track]:
+    choices = {"audio": audio, "subtitles": subtitles}
+    return [
+        track
+        for track in details.tracks
+        if track.type in choices
+        and (not _keeps(choices[track.type], track) or (commentary and _is_commentary(track)))
+    ]
+
+
+NO_AUDIO = "No audio tracks would be left, so this file is skipped."
+
+
+def _left_warnings(details: MediaDetails, removed: list[Track]) -> list[str]:
+    """Flag files that would end up with no tracks of a kind at all."""
+    gone = {t.uid for t in removed}
+    warnings = []
+    subs = details.of_type("subtitles")
+    if subs and all(t.uid in gone for t in subs):
+        warnings.append("No subtitles would be left in this file.")
+    return warnings
+
+
 def _existing_copy(final: Path, overwrite: bool) -> str | None:
     if not final.exists():
         return None
@@ -197,75 +290,6 @@ def _existing_copy(final: Path, overwrite: bool) -> str | None:
     return None
 
 
-def _plan_remove(
-    action: RemoveTracksAction, path: str, details: MediaDetails, size: int
-) -> FilePlan:
-    choices = {"audio": action.audio, "subtitles": action.subtitles}
-    remove = [
-        track
-        for track in details.tracks
-        if track.type in choices
-        and (
-            not _keeps(choices[track.type], track)
-            or (action.remove_commentary and _is_commentary(track))
-        )
-    ]
-    if not remove:
-        return _skip(path, "Nothing to remove: every track is one you want to keep.")
-    try:
-        plan = remove_tracks.plan_copy(details, [t.uid for t in remove], [])
-    except remove_tracks.CopyRefusedError as error:
-        return _skip(path, str(error))
-    final = Path(path).with_name(remove_tracks.output_name(Path(path).name))
-    problem = _existing_copy(final, action.overwrite)
-    if problem:
-        return _skip(path, problem)
-    lines = [f"Leave out {remove_tracks.describe_track(t, details)}" for t in plan.removed]
-    lines += plan.warnings
-    return FilePlan(
-        path=path,
-        name=Path(path).name,
-        will_run=True,
-        lines=lines,
-        job_kind=remove_tracks.KIND,
-        job_title=remove_tracks.TITLE,
-        params={
-            "remove": [t.uid for t in plan.removed],
-            "changes": [],
-            "overwrite": action.overwrite,
-        },
-        new_file=final.name,
-        space_needed=size,
-    )
-
-
-def _plan_hdr10(action: Hdr10CopyAction, path: str, details: MediaDetails, size: int) -> FilePlan:
-    if not details.hdr_checked:
-        return _skip(path, "MediaInfo couldn't read this file, so its HDR wasn't checked.")
-    try:
-        plan = hdr10_copy.plan_hdr10(details)
-    except hdr10_copy.Hdr10Refused as error:
-        return _skip(path, str(error))
-    final = Path(path).with_name(hdr10_copy.output_name(Path(path).name))
-    problem = _existing_copy(final, action.overwrite)
-    if problem:
-        return _skip(path, problem)
-    shows = " and ".join(plan.expected_formats) or "HDR10"
-    lines = [f"Copy without Dolby Vision profile {plan.profile}: players show it as {shows}"]
-    return FilePlan(
-        path=path,
-        name=Path(path).name,
-        will_run=True,
-        lines=lines,
-        job_kind=hdr10_copy.KIND,
-        job_title=hdr10_copy.TITLE,
-        params={"overwrite": action.overwrite},
-        new_file=final.name,
-        space_needed=size,
-        work_needed=2 * size,
-    )
-
-
 def _first(tracks: list[Track], language: str) -> Track | None:
     matching = [t for t in tracks if normalize_language(t.language) == language]
     # Prefer ordinary tracks over commentary, audio description and hearing-impaired ones.
@@ -273,28 +297,32 @@ def _first(tracks: list[Track], language: str) -> Track | None:
     return matching[0] if matching else None
 
 
-def default_track_changes(
-    action: DefaultTracksAction, details: MediaDetails
+def _default_changes(
+    audio_language: str | None,
+    subtitles: str,
+    subtitle_language: str | None,
+    details: MediaDetails,
+    left_out: set[str] | frozenset[str] = frozenset(),
 ) -> tuple[list[TrackChange], list[str]]:
-    """The track changes the action means for this file, and notes about parts not possible."""
+    """Default flags for one file (ignoring tracks that are being left out), and notes."""
     wanted: dict[str, bool] = {}
     notes: list[str] = []
-    if action.audio_language:
-        audio = details.of_type("audio")
-        target = _first(audio, action.audio_language)
+    if audio_language:
+        audio = [t for t in details.of_type("audio") if t.uid not in left_out]
+        target = _first(audio, audio_language)
         if target is None:
-            notes.append(f"No {language_name(action.audio_language)} audio track.")
+            notes.append(f"No {language_name(audio_language)} audio track.")
         else:
             for track in audio:
                 wanted[track.uid] = track is target
-    subs = details.of_type("subtitles")
-    if action.subtitles == "off":
+    subs = [t for t in details.of_type("subtitles") if t.uid not in left_out]
+    if subtitles == "off":
         for track in subs:
             wanted[track.uid] = False
-    elif action.subtitles == "language" and action.subtitle_language:
-        target = _first([t for t in subs if not t.forced], action.subtitle_language)
+    elif subtitles == "language" and subtitle_language:
+        target = _first([t for t in subs if not t.forced], subtitle_language)
         if target is None:
-            notes.append(f"No {language_name(action.subtitle_language)} subtitles.")
+            notes.append(f"No {language_name(subtitle_language)} subtitles.")
         else:
             for track in subs:
                 wanted[track.uid] = track is target
@@ -306,25 +334,183 @@ def default_track_changes(
     return changes, notes
 
 
+def default_track_changes(
+    action: DefaultTracksAction, details: MediaDetails
+) -> tuple[list[TrackChange], list[str]]:
+    """The track changes the action means for this file, and notes about parts not possible."""
+    return _default_changes(
+        action.audio_language, action.subtitles, action.subtitle_language, details
+    )
+
+
+def _copy_job(
+    path: str,
+    details: MediaDetails,
+    size: int,
+    removed: list[Track],
+    changes: list[TrackChange],
+    *,
+    overwrite: bool,
+    update_copy: bool,
+    notes: list[str],
+) -> FilePlan:
+    """A remove-tracks copy (or, for one of Tailarr's copies, an update of that copy)."""
+    try:
+        plan = remove_tracks.plan_copy(
+            details, [t.uid for t in removed], changes, require_removal=not update_copy
+        )
+    except remove_tracks.CopyRefusedError as error:
+        text = str(error)
+        warnings = [NO_AUDIO] if "audio" in text else []
+        return _skip(path, NO_AUDIO if warnings else text, warnings=warnings, is_copy=update_copy)
+    if not plan.removed and not plan.setting_changes():
+        return _skip(path, "Nothing to change in this file.", is_copy=update_copy)
+    if update_copy:
+        final = Path(path)
+    else:
+        final = Path(path).with_name(remove_tracks.output_name(Path(path).name))
+        problem = _existing_copy(final, overwrite)
+        if problem:
+            return _skip(path, problem)
+    lines = [f"Leave out {remove_tracks.describe_track(t, details)}" for t in plan.removed]
+    lines += [
+        f"{remove_tracks.track_label(t, details)}: {', '.join(c)}"
+        for t, c in plan.setting_changes()
+    ]
+    lines += notes + plan.warnings
+    return FilePlan(
+        path=path,
+        name=Path(path).name,
+        will_run=True,
+        lines=lines,
+        job_kind=remove_tracks.KIND,
+        job_title=remove_tracks.TITLE,
+        params={
+            "remove": [t.uid for t in plan.removed],
+            "changes": [c.model_dump(exclude_none=True) for c in changes],
+            "overwrite": overwrite or update_copy,
+            "update_copy": update_copy,
+        },
+        new_file=None if update_copy else final.name,
+        is_copy=update_copy,
+        warnings=_left_warnings(details, plan.removed),
+        space_needed=size,
+    )
+
+
+def _plan_remove(
+    action: RemoveTracksAction, path: str, details: MediaDetails, size: int, update_copy: bool
+) -> FilePlan:
+    remove = _removals(action.audio, action.subtitles, action.remove_commentary, details)
+    if not remove:
+        return _skip(
+            path, "Nothing to remove: every track is one you want to keep.", is_copy=update_copy
+        )
+    return _copy_job(
+        path,
+        details,
+        size,
+        remove,
+        [],
+        overwrite=action.overwrite,
+        update_copy=update_copy,
+        notes=[],
+    )
+
+
+def _plan_hdr10(
+    action: Hdr10CopyAction, path: str, details: MediaDetails, size: int, update_copy: bool
+) -> FilePlan:
+    if not details.hdr_checked:
+        return _skip(path, "MediaInfo couldn't read this file, so its HDR wasn't checked.")
+    removed = _removals(action.audio, action.subtitles, action.remove_commentary, details)
+    changes, notes = _default_changes(
+        action.default_audio,
+        action.default_subtitles,
+        action.default_subtitle_language,
+        details,
+        {t.uid for t in removed},
+    )
+    has_dv = details.hdr.dv_profile is not None or "Dolby Vision" in details.hdr.formats
+    if update_copy and not has_dv:
+        # Already a copy without Dolby Vision: just bring its tracks in line.
+        if not action.changes_tracks:
+            return _skip(path, "This copy already has no Dolby Vision.", is_copy=True)
+        return _copy_job(
+            path, details, size, removed, changes, overwrite=True, update_copy=True, notes=notes
+        )
+    try:
+        plan = hdr10_copy.plan_hdr10(details, [t.uid for t in removed], changes)
+    except hdr10_copy.Hdr10Refused as error:
+        return _skip(path, str(error), is_copy=update_copy)
+    except remove_tracks.CopyRefusedError as error:
+        text = str(error)
+        warnings = [NO_AUDIO] if "audio" in text else []
+        return _skip(path, NO_AUDIO if warnings else text, warnings=warnings, is_copy=update_copy)
+    if update_copy:
+        final = Path(path)
+    else:
+        final = Path(path).with_name(hdr10_copy.output_name(Path(path).name))
+        problem = _existing_copy(final, action.overwrite)
+        if problem:
+            return _skip(path, problem)
+    shows = " and ".join(plan.expected_formats) or "HDR10"
+    lines = [
+        f"{'Remove Dolby Vision from this copy' if update_copy else 'Copy without Dolby Vision'}"
+        f" (profile {plan.profile}): players show it as {shows}"
+    ]
+    if plan.tracks:
+        lines += [
+            f"Leave out {remove_tracks.describe_track(t, details)}" for t in plan.tracks.removed
+        ]
+        lines += [
+            f"{remove_tracks.track_label(t, details)}: {', '.join(c)}"
+            for t, c in plan.tracks.setting_changes()
+        ]
+        lines += plan.tracks.warnings
+    lines += notes
+    return FilePlan(
+        path=path,
+        name=Path(path).name,
+        will_run=True,
+        lines=lines,
+        job_kind=hdr10_copy.KIND,
+        job_title=hdr10_copy.TITLE,
+        params={
+            "overwrite": action.overwrite or update_copy,
+            "remove": [t.uid for t in plan.tracks.removed] if plan.tracks else [],
+            "changes": [c.model_dump(exclude_none=True) for c in changes],
+            "update_copy": update_copy,
+        },
+        new_file=None if update_copy else final.name,
+        is_copy=update_copy,
+        warnings=_left_warnings(details, plan.tracks.removed if plan.tracks else []),
+        space_needed=size,
+        work_needed=2 * size,
+    )
+
+
 def _plan_defaults(
     action: DefaultTracksAction,
     path: str,
     details: MediaDetails,
     links: int,
     allow_hardlinked: bool,
+    is_copy: bool,
 ) -> FilePlan:
     changes, notes = default_track_changes(action, details)
     planned = track_settings.plan(details, changes)
     if not planned:
         reason = " ".join(notes) or "Already set up like this."
-        return _skip(path, reason)
+        return _skip(path, reason, is_copy=is_copy)
     if links > 1 and not allow_hardlinked:
         return _skip(
             path,
             "Also in your downloads (still seeding), so it's only changed if you tick "
             "“I understand” for seeding files.",
             hardlinked=True,
-            changes_original=True,
+            changes_original=not is_copy,
+            is_copy=is_copy,
         )
     lines = [f"{p.label}: {', '.join(p.changes)}" for p in planned] + notes
     return FilePlan(
@@ -338,8 +524,9 @@ def _plan_defaults(
             "changes": [c.model_dump(exclude_none=True) for c in changes],
             "allow_hardlinked": allow_hardlinked,
         },
-        changes_original=True,
+        changes_original=not is_copy,
         hardlinked=links > 1,
+        is_copy=is_copy,
     )
 
 
@@ -349,25 +536,30 @@ def plan_file(
     details: MediaDetails | None,
     *,
     is_copy: bool = False,
+    update_copies: bool = False,
     allow_hardlinked: bool = False,
     read_error: str | None = None,
 ) -> FilePlan:
-    """What `action` would do to the file at `path`. Changes nothing."""
-    if is_copy:
+    """What `action` would do to the file at `path`. Changes nothing.
+
+    Tailarr's own copies are skipped unless `update_copies` (batch "also change copies"):
+    then the copy itself is updated where it is, rather than a copy of the copy being made.
+    """
+    if is_copy and not update_copies:
         return _skip(path, "This is a copy Tailarr made; actions apply to original files.")
     if not path.lower().endswith(".mkv"):
-        return _skip(path, "Not an MKV file, so Tailarr can't change it.")
+        return _skip(path, "Not an MKV file, so Tailarr can't change it.", is_copy=is_copy)
     if details is None:
-        return _skip(path, read_error or "Tailarr couldn't read this file.")
+        return _skip(path, read_error or "Tailarr couldn't read this file.", is_copy=is_copy)
     try:
         stat = os.stat(path)
     except OSError:
-        return _skip(path, "This file can't be opened any more.")
+        return _skip(path, "This file can't be opened any more.", is_copy=is_copy)
     if isinstance(action, Hdr10CopyAction):
-        return _plan_hdr10(action, path, details, stat.st_size)
+        return _plan_hdr10(action, path, details, stat.st_size, is_copy)
     if isinstance(action, RemoveTracksAction):
-        return _plan_remove(action, path, details, stat.st_size)
-    return _plan_defaults(action, path, details, stat.st_nlink, allow_hardlinked)
+        return _plan_remove(action, path, details, stat.st_size, is_copy)
+    return _plan_defaults(action, path, details, stat.st_nlink, allow_hardlinked, is_copy)
 
 
 # -- disk space for many jobs ---------------------------------------------------------------

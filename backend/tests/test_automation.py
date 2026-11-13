@@ -252,3 +252,68 @@ def test_folder_check_finds_new_files_without_watching_events(
     # Files that were already there when watching started aren't treated as new.
     assert len(runner.pending()) == 1
     app_client.put("/api/settings/automation", json={"watch_folders": False})
+
+
+def test_upgrade_to_a_file_with_the_same_name(app_client: TestClient, config) -> None:
+    """Radarr's new file can have exactly the old name: the old copy is still stale."""
+    app_client.post("/api/rules", json=DV_RULE)
+    folder = Path(config.default_movies_dir) / COLOUR
+    original = folder / COLOUR_FILE
+    stat = original.stat()
+    with Session(app_client.app.state.engine) as session:  # type: ignore[attr-defined]
+        session.add(
+            CopyRecord(
+                path=str(folder / COLOUR_COPY),
+                source_path=str(original),
+                source_size=stat.st_size,
+                source_mtime=stat.st_mtime,
+                kind="hdr10_copy",
+                created_at=time.time(),
+            )
+        )
+        session.commit()
+    # The upgrade replaces the file under the same name (a different file: new date).
+    replacement = folder / "incoming.mkv"
+    shutil.copy(original, replacement)
+    os.utime(replacement, (time.time() + 60, time.time() + 60))
+    os.replace(replacement, original)
+    result = _hook(
+        app_client,
+        "radarr",
+        {
+            "eventType": "Download",
+            "isUpgrade": True,
+            "movieFile": {"path": str(original)},
+            "deletedFiles": [{"path": str(original)}],
+        },
+    )
+    assert "moved to the recycle folder" in result["message"]
+    assert (folder / ".tailarr-recycle" / COLOUR_COPY).is_file()
+    assert _runner(app_client).tick() == 1
+    jobs = _wait_all(app_client)
+    assert [j["status"] for j in jobs] == ["done"]
+    assert (folder / COLOUR_COPY).is_file()  # a fresh copy from the new file
+
+
+def test_radarr_already_deleted_both_files(app_client: TestClient, config) -> None:
+    """Radarr may delete the copy itself on an upgrade (it manages both files)."""
+    app_client.post("/api/rules", json=DV_RULE)
+    folder = Path(config.default_movies_dir) / COLOUR
+    original, copy = folder / COLOUR_FILE, folder / COLOUR_COPY
+    new = folder / "Colour Test (2023) Remux-2160p DV.mkv"
+    shutil.copy(original, new)
+    original.unlink()
+    copy.unlink()
+    _hook(
+        app_client,
+        "radarr",
+        {
+            "eventType": "Download",
+            "isUpgrade": True,
+            "movieFile": {"path": str(new)},
+            "deletedFiles": [{"path": str(original)}, {"path": str(copy)}],
+        },
+    )
+    assert _runner(app_client).tick() == 1
+    assert [j["status"] for j in _wait_all(app_client)] == ["done"]
+    assert (folder / "Colour Test (2023) Remux-2160p DV - HDR10.mkv").is_file()

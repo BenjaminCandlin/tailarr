@@ -46,6 +46,7 @@ class RuleIn(BaseModel):
     enabled: bool = False
     scope: Scope = "films"
     conditions: list[Condition] = []
+    match: Literal["all", "any"] = "all"  # all conditions must be true, or any one of them
     action: Action
     # Rules never touch originals unless this is ticked (safety rule 2), off by default.
     allow_originals: bool = False
@@ -82,6 +83,7 @@ class Rule(SQLModel, table=True):
     enabled: bool = False
     scope: str = "films"
     conditions: str = "[]"  # JSON list of Condition
+    match: str = "all"  # "all" or "any" (added after 1.0; added to old databases in place)
     action: str  # JSON Action
     allow_originals: bool = False
     allow_hardlinked: bool = False
@@ -96,6 +98,7 @@ class Rule(SQLModel, table=True):
                 "enabled": self.enabled,
                 "scope": self.scope,
                 "conditions": json.loads(self.conditions),
+                "match": self.match or "all",
                 "action": json.loads(self.action),
                 "allow_originals": self.allow_originals,
                 "allow_hardlinked": self.allow_hardlinked,
@@ -107,6 +110,7 @@ class Rule(SQLModel, table=True):
         self.enabled = rule.enabled
         self.scope = rule.scope
         self.conditions = _CONDITIONS.dump_json(rule.conditions).decode()
+        self.match = rule.match
         self.action = _ACTION.dump_json(rule.action).decode()
         self.allow_originals = rule.allow_originals
         self.allow_hardlinked = rule.allow_hardlinked

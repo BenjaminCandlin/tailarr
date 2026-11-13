@@ -79,9 +79,15 @@ def tidy_copies_of(
 ) -> list[str]:
     """Move Tailarr's copies of an original that's gone into the recycle folder."""
     moved: list[str] = []
-    if os.path.exists(original):
-        return moved  # the original is still there: its copies aren't stale
     for record in _stale_copies(engine, original):
+        try:
+            now = os.stat(original)
+            if (now.st_size, now.st_mtime) == (record.source_size, record.source_mtime):
+                continue  # the original is still the file this copy was made from
+        except FileNotFoundError:
+            pass  # gone: its copies are stale
+        # (A new file with the same name, e.g. an upgrade to the same quality, is a
+        # different file: copies of the old one are stale too.)
         copy = record.path
         problem = None
         if not any(is_inside(copy, root) for root in roots):

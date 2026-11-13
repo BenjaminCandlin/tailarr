@@ -473,6 +473,8 @@ class BatchIn(BaseModel):
     action: Action
     # Tick "I understand" for files that are also in the downloads folder (still seeding).
     allow_hardlinked: bool = False
+    # Also change the copies Tailarr made of these episodes (updated where they are).
+    include_copies: bool = False
 
 
 class BatchConfirmIn(BatchIn):
@@ -488,6 +490,8 @@ class BatchFileOut(BaseModel):
     reason: str | None
     hardlinked: bool
     new_file: str | None
+    is_copy: bool = False  # one of Tailarr's copies (only with "also change copies")
+    warnings: list[str] = []  # worth a look, e.g. no subtitles would be left
 
 
 class SpaceTotalOut(BaseModel):
@@ -506,6 +510,8 @@ class BatchPreviewOut(BaseModel):
     will_run: int
     skipped: int
     hardlinked_skipped: int  # seeding files left out because "I understand" isn't ticked
+    flagged: int  # files worth a look (e.g. no subtitles or no audio would be left)
+    copies: int  # Tailarr copies these episodes have (offered with "also change copies")
     space: list[SpaceTotalOut]
     enough_space: bool
 
@@ -536,28 +542,33 @@ def _batch_plans(
     for episode in episodes:
         files = _episode_files(session, episode)
         main = next((f for f in files if f.name == episode.main_file), None)
-        if main is None or not is_inside(main.path, root):
-            continue
-        details, error = None, None
-        try:
-            record = reader.get(session, main.path)
-            details = details_of(record)
-            error = record.error
-        except OSError:
-            error = "This file can't be opened any more."
-        plans.append(
-            (
-                episode,
-                plan_file(
-                    body.action,
-                    main.path,
-                    details,
-                    is_copy=main.is_copy,
-                    allow_hardlinked=body.allow_hardlinked,
-                    read_error=error,
-                ),
+        targets = [main] if main is not None else []
+        if body.include_copies:
+            targets += [f for f in files if f.is_copy and f is not main]
+        for file in targets:
+            if not is_inside(file.path, root):
+                continue
+            details, error = None, None
+            try:
+                record = reader.get(session, file.path)
+                details = details_of(record)
+                error = record.error
+            except OSError:
+                error = "This file can't be opened any more."
+            plans.append(
+                (
+                    episode,
+                    plan_file(
+                        body.action,
+                        file.path,
+                        details,
+                        is_copy=file.is_copy,
+                        update_copies=body.include_copies,
+                        allow_hardlinked=body.allow_hardlinked,
+                        read_error=error,
+                    ),
+                )
             )
-        )
     totals = space_totals([p for _, p in plans], usable_work_folder(config.work_dir))
     space = [
         SpaceTotalOut(label=t.label, needed=t.needed, free=t.free, enough=t.enough) for t in totals
@@ -575,17 +586,40 @@ def _batch_preview(
     files = []
     for episode, plan in plans:
         label = episode_label(episode.season, episode.episode, episode.episode_end)
+        text = " – ".join(p for p in (label, episode.title) if p) or plan.name
+        if plan.is_copy:
+            text += " (Tailarr's copy)"
         files.append(
             BatchFileOut(
                 episode_id=episode.id,  # type: ignore[arg-type]
-                label=" – ".join(p for p in (label, episode.title) if p) or plan.name,
+                label=text,
                 file=plan.name,
                 will_run=plan.will_run,
                 lines=plan.lines,
                 reason=plan.reason,
                 hardlinked=plan.hardlinked,
                 new_file=plan.new_file,
+                is_copy=plan.is_copy,
+                warnings=plan.warnings,
             )
+        )
+    copies = len(
+        session.exec(
+            select(EpisodeFile.id).where(
+                EpisodeFile.show_id == show.id, col(EpisodeFile.is_copy).is_(True)
+            )
+        ).all()
+    )
+    if body.season is not None:
+        season_ids = {e.id for e in _episodes(session, show, body.season)}
+        copies = len(
+            [
+                f
+                for f in session.exec(
+                    select(EpisodeFile).where(EpisodeFile.show_id == show.id)
+                ).all()
+                if f.is_copy and f.episode_id in season_ids
+            ]
         )
     preview = BatchPreviewOut(
         title=f"{action}: {scope}",
@@ -596,6 +630,8 @@ def _batch_preview(
         will_run=sum(1 for _, p in plans if p.will_run),
         skipped=sum(1 for _, p in plans if not p.will_run),
         hardlinked_skipped=sum(1 for _, p in plans if not p.will_run and p.hardlinked),
+        flagged=sum(1 for _, p in plans if p.warnings),
+        copies=copies,
         space=space,
         enough_space=all(s.enough for s in space),
     )

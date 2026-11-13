@@ -78,7 +78,8 @@ def describe_rule(rule: RuleIn) -> str:
     what = {"films": "film", "tv": "episode", "both": "film or episode"}[rule.scope]
     text = f"When a new {what} is added"
     if rule.conditions:
-        text += ", if " + " and ".join(describe_condition(c) for c in rule.conditions)
+        joiner = " or " if rule.match == "any" else " and "
+        text += ", if " + joiner.join(describe_condition(c) for c in rule.conditions)
     action = describe_action(rule.action)
     return f"{text}: {action[0].lower()}{action[1:]}."
 
@@ -189,8 +190,10 @@ def plan_for(rule: RuleIn, candidate: Candidate) -> FilePlan | None:
     if candidate.is_copy:
         return None  # rules only look at original files
     details = candidate.details
-    if details is not None and not all(condition_met(c, details) for c in rule.conditions):
-        return None
+    if details is not None and rule.conditions:
+        check = any if rule.match == "any" else all
+        if not check(condition_met(c, details) for c in rule.conditions):
+            return None
     plan = plan_file(
         rule.action,
         candidate.path,
