@@ -2,9 +2,8 @@
 # every time a pull request is merged into main (tag `latest`), and for every
 # release tag like v1.0.0 (tags `1.0.0` and `1.0`, so a version can be pinned).
 #
-# The first publish creates the package as PRIVATE. To let Unraid download it
-# without logging in, make it public once: GitHub > your profile > Packages >
-# tailarr > Package settings > Change visibility > Public.
+# The package must be public (GitHub > your profile > Packages > tailarr >
+# Package settings > Change visibility) so Unraid can download it without logging in.
 name: Publish image
 
 on:

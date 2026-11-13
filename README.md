@@ -1,13 +1,28 @@
 # Tailarr
 
-Tailor your media to suit your players.
+**Tailor your media to suit your players.**
 
-Tailarr is a self-hosted web app for Unraid that changes what's inside your MKV files
-(tracks, default/forced flags, track names, Dolby Vision) **without ever re-encoding**.
-It's a friendly front-end for MKVToolNix and dovi_tool, made to sit alongside Radarr,
-Sonarr and Plex.
+Tailarr is a self-hosted web app that changes what's *inside* your MKV films and TV
+episodes (audio and subtitle tracks, which ones play by default, track names, and Dolby
+Vision) **without ever re-encoding** the picture or sound. It's a friendly front-end for
+[MKVToolNix](https://mkvtoolnix.download/) and
+[dovi_tool](https://github.com/quietvoid/dovi_tool), made to sit next to Radarr, Sonarr
+and Plex on an Unraid server.
 
-Version 1.0.
+![The Films page](docs/screenshots/desktop-dark-films-grid.png)
+
+## Why you might want it
+
+- **Your TV shows Dolby Vision films with purple or green colours.** Tailarr makes an
+  HDR10 copy next to the original (`Film - HDR10.mkv`). Plex shows both as versions of
+  one film, so each device plays the one that suits it.
+- **Films come with a dozen audio and subtitle tracks you never use**, or the wrong
+  one plays by default. Untick them, or pick the default, in a couple of clicks.
+- **You'd like it to happen by itself.** Rules such as "if a new film has Dolby Vision,
+  make an HDR10 copy" run when Radarr or Sonarr add a film or episode.
+
+Everything happens in a web page that works on a computer or a phone, in plain English,
+with a summary to confirm before anything changes.
 
 ## What it does
 
@@ -15,20 +30,24 @@ Version 1.0.
   what's inside every file: video, audio and subtitle tracks in plain words ("Dolby
   TrueHD Atmos 7.1", "English, forced"), chapters, and HDR (Dolby Vision with its
   profile, HDR10, HDR10+, HLG).
-- **Make a copy without Dolby Vision** (`Film - HDR10.mkv`), for TVs and players that
-  show Dolby Vision with the wrong colours. Profile 5 is refused (it would show wrong
-  colours).
+- **Make a copy without Dolby Vision** (`Film - HDR10.mkv`) for TVs and players that
+  show Dolby Vision with the wrong colours. All audio, subtitles, chapters and the exact
+  frame rate are kept. (Profile 5 is refused: it has no HDR10 picture underneath.)
 - **Save a copy without some tracks** (`Film - Tailarr.mkv`): untick the audio or
   subtitle tracks you don't want. Tick **Also remove Dolby Vision** to do both in one go.
 - **Change track settings** (default / forced / names) in the file itself.
 - **Replace the original with a copy**, with the original kept in a hidden recycle
-  folder for 30 days (and a **Restore** button to undo it).
-- **Change a whole season or show at once**, choosing by language ("keep only English
-  subtitles", "make Dolby Vision episodes into HDR10 copies").
-- **Rules** that run by themselves for new films and episodes ("If a new film has
-  Dolby Vision, make an HDR10 copy"), with a preview first.
-- **Radarr, Sonarr and Plex**: proper titles and posters, Plex shows new copies
-  straight away, and Tailarr's copies follow Radarr/Sonarr upgrades and renames.
+  folder for 30 days, and a **Restore** button to undo it.
+- **Change many films, or a whole season or show, at once**, choosing by language
+  ("keep only English subtitles", "make Dolby Vision episodes into HDR10 copies").
+- **Rules** that run by themselves for new films and episodes, with a preview first and
+  an activity log of everything they did.
+- **Radarr, Sonarr and Plex**: proper titles and posters, Plex shows new copies straight
+  away, and Tailarr's copies follow Radarr/Sonarr upgrades and renames.
+
+| Film page | Rules | On a phone |
+|---|---|---|
+| ![A film's tracks](docs/screenshots/desktop-dark-film-detail.png) | ![A rule preview](docs/screenshots/desktop-light-rule-preview.png) | ![Films on a phone](docs/screenshots/phone-dark-films-grid.png) |
 
 ## Safety
 
@@ -45,54 +64,23 @@ Version 1.0.
 - Tailarr only touches files inside the Films and TV folders you choose, never your
   downloads.
 
-## Install on Unraid
+## Install
 
-1. **Make the image public (one time only).** The repository is private, so after the
-   first image is published go to GitHub → your profile → **Packages** → `tailarr` →
-   **Package settings** → *Danger Zone* → **Change visibility** → **Public**.
-2. **Copy the template.** Download `unraid/tailarr.xml` from this repository and copy it
-   to your Unraid flash drive as
-   `config/plugins/dockerMan/templates-user/my-tailarr.xml`
-   (over the network: `\\TOWER\flash\config\plugins\dockerMan\templates-user\`).
-3. In Unraid go to **Docker → Add Container**, choose **tailarr** from the *Template*
-   list, check the settings and click **Apply**:
-   - **Data**: `/mnt/user/data` → `/data`, the same as in Radarr and Sonarr.
-   - **Config**: `/mnt/user/appdata/tailarr`.
-   - **PUID / PGID / UMASK**: leave as `99` / `100` / `002`.
-   - Put Tailarr on the same custom Docker network as Radarr, Sonarr and Plex, so they
-     can find each other by container name.
-4. Open `http://<your-server>:8484` and go to **Settings**. Every line in the
-   **System check** should have a green tick.
+The short version for Unraid (the [install guide](docs/INSTALL.md) has every step, plus
+Docker Compose for other servers):
 
-The image is `ghcr.io/benjamincandlin/tailarr:latest` and is rebuilt automatically every
-time a change is merged. To update, use **Check for Updates** on Unraid's Docker page.
+1. In Unraid's terminal:
 
-**Staying on one version:** every release also has its own image, for example
-`ghcr.io/benjamincandlin/tailarr:1.0.0` (exactly that version) or
-`ghcr.io/benjamincandlin/tailarr:1.0` (that version plus small fixes). To use one, edit
-the container in Unraid and change the **Repository** field from `…/tailarr:latest` to
-`…/tailarr:1.0.0`. Change it back to `latest` to follow every update again.
+   ```bash
+   wget -O /boot/config/plugins/dockerMan/templates-user/my-tailarr.xml https://raw.githubusercontent.com/BenjaminCandlin/tailarr/main/unraid/tailarr.xml
+   ```
 
-Optional: fill in **Work folder (optional)** (or add a path with container path `/work`)
-pointing at a folder on a fast SSD, for example `/mnt/cache/tailarr-work`. HDR10 copies
-are then much quicker, because their big working files stay off the array. Settings →
-**Work folder** shows whether it's set up and explains each step.
+2. **Docker → Add Container → Template: tailarr**. Map **Data** exactly like Radarr and
+   Sonarr (`/mnt/user/data` → `/data`), then **Apply**.
+3. Open `http://<your-server>:8484` → **Settings**: every line of the System check
+   should have a green tick.
 
-## First steps
-
-1. **Settings → Library folders**: the Films and TV folders (`/data/media/movies` and
-   `/data/media/tv` by default).
-2. **Settings → Radarr, Sonarr and Plex** (optional): fill in `http://radarr:7878`,
-   `http://sonarr:8989`, `http://plex:32400` with their API keys / token, press **Test**,
-   then **Save connections**.
-3. **Webhooks** (optional, needed for automatic rules and tidy copies): in Radarr and
-   Sonarr, Settings → Connect → + → **Webhook**, paste the address shown in Tailarr's
-   Settings, tick *On File Import*, *On File Upgrade*, *On Rename* and the
-   *On … File Delete* options.
-4. **Films**: open a film to see its tracks, change them, or make copies. You always see
-   a summary first.
-5. **Rules**: start from one of the examples, press **Preview this rule**, save it, and
-   switch it on when you're happy.
+The image is `ghcr.io/benjamincandlin/tailarr` (`latest`, or a version such as `1.0.0`).
 
 ## How things work
 
@@ -118,9 +106,8 @@ are then much quicker, because their big working files stay off the array. Setti
 ## Login
 
 Off by default. **Settings → Login** asks for a username and password. If you forget the
-password, add the variable `TAILARR_DISABLE_LOGIN` = `1` to the container (Unraid: edit
-the container → *Add another Path, Port, Variable…*), start it once, then remove the
-variable again.
+password, add the variable `TAILARR_DISABLE_LOGIN` = `1` to the container, start it once,
+then remove the variable again.
 
 Tailarr always refuses changes that don't come from its own page, so other websites
 can't make your browser change your files. Radarr/Sonarr webhooks use a secret instead
@@ -145,12 +132,11 @@ example `172.18.0.2` (several: separate with commas; whole networks like
 - **A job failed**: open the Queue, read the message, and press "Show technical details"
   for the tools' own words.
 
-## For developers
+## Contributing
 
-See `CLAUDE.md` (plan, rules, how to run the tests), `PROGRESS.md` and `DECISIONS.md`.
+Ideas, bug reports and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md)
+for how the project is built and tested, and the safety rules every change must keep.
 
-```bash
-cd backend && uv sync && uv run pytest
-cd frontend && npm ci && npm run lint && npm test && npm run build
-cd e2e && npm ci && npx playwright test
-```
+## Licence
+
+[GNU GPL v3](LICENSE).

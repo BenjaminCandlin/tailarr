@@ -1,7 +1,11 @@
 # CLAUDE.md — Tailarr
 
-> Read this file, `PROGRESS.md` and `DECISIONS.md` at the start of **every**
-> session before doing anything else. They are the project's memory.
+> Read this file at the start of **every** session before doing anything else.
+> The owner's working notes, `PROGRESS.md` and `DECISIONS.md`, are the project's
+> memory. They live in the **private** repository `BenjaminCandlin/tailarr-notes`
+> (this repository is public). If the session has that repository, read both too;
+> if not, ask for it to be added (or add it with the session's repository tools).
+> Never copy their contents into this public repository.
 
 ## 1. What Tailarr is
 
@@ -148,28 +152,19 @@ one process, no external services.
 | Tests | **pytest** (backend, using real MKVToolNix on generated sample files), **Vitest** + Testing Library (UI parts), **Playwright** (whole app in desktop *and* phone sizes, with screenshots) | Real tools on real (tiny) files catch real problems. |
 | Container | Debian slim base, MKVToolNix + MediaInfo from apt, dovi_tool from GitHub release; small entrypoint script that applies PUID/PGID/UMASK | Familiar to Unraid users (same env vars as linuxserver.io images). |
 | Publishing | GitHub Actions → GitHub Container Registry `ghcr.io/benjamincandlin/tailarr` | Free; builds and publishes automatically on every merge to `main`. See "Public image" below. |
-| Unraid | Template XML in `unraid/tailarr.xml` | Copied once onto the Unraid flash drive; fields pre-filled. |
+| Unraid | Template XML in `unraid/tailarr.xml` | Downloaded once onto the Unraid flash drive (see `docs/INSTALL.md`); fields pre-filled. |
 
-### Public image from a private repo
+### Public repository, private notes
 
-The GitHub repo is **private**, but Unraid must download the image without
-logging in, so the **image is made public** while the code stays private.
-
-- GitHub Container Registry packages have their own visibility, separate
-  from the repo. The first publish creates the package as *private*;
-  GitHub doesn't let the workflow change that itself.
-- **One-time step for the owner** (after the first image is published):
-  GitHub → your profile → **Packages** → `tailarr` → **Package settings** →
-  *Danger Zone* → **Change visibility** → **Public**. Every later publish stays
-  public automatically.
-- Be aware: anyone could then download the image and see the app inside it
-  (it contains no secrets — settings and API keys live only in `/config`).
-- Because the repo is private, Unraid can't fetch the template from GitHub
-  either: the owner downloads `unraid/tailarr.xml` once and copies it to the
-  flash drive at `config/plugins/dockerMan/templates-user/my-tailarr.xml`,
-  then uses **Docker → Add Container → Template: tailarr**.
-- Alternatives considered: logging Unraid into GHCR with a token (fiddly,
-  tokens expire); Docker Hub (another account to manage).
+- The code, image (`ghcr.io/benjamincandlin/tailarr`, public package) and
+  Unraid template are public, so anyone can install Tailarr and suggest
+  improvements. The install guide is `docs/INSTALL.md`; contributors read
+  `CONTRIBUTING.md`.
+- The owner's progress notes and decisions (which include answers about their
+  own server) are in the private `tailarr-notes` repository. Update them there,
+  in a separate commit/pull request on that repository.
+- Never commit personal details: real server addresses, API keys, the owner's
+  email, or notes about their library. Use made-up examples.
 
 Default web port: **8484** (configurable).
 
@@ -404,7 +399,8 @@ CLAUDE.md, empty PROGRESS.md and DECISIONS.md.
 
 ## 7. Way of working (for every session)
 
-1. **Start:** read `CLAUDE.md`, `PROGRESS.md`, `DECISIONS.md`. Check that the
+1. **Start:** read `CLAUDE.md`, and `PROGRESS.md` / `DECISIONS.md` from the
+   private `tailarr-notes` repository. Check that the
    previous stage's PR has been merged into `main`; start from latest `main`.
 2. **Branch:** never commit to `main`. Use a branch named after the stage,
    e.g. `stage-3-track-viewer`. If the session environment assigns a
@@ -412,14 +408,14 @@ CLAUDE.md, empty PROGRESS.md and DECISIONS.md.
    title.
 3. **Scope:** do exactly one stage, completely. Don't start the next one.
 4. **Decide independently.** Make sensible choices; record notable ones in
-   `DECISIONS.md` (date, decision, why, alternatives). Only stop for
+   `DECISIONS.md` in `tailarr-notes` (date, decision, why, alternatives). Only stop for
    something genuinely undecidable; collect all questions and put them at
    the end of the summary and PR description.
 5. **Tests:** write automated tests for everything built (backend with real
    tools on generated sample files, UI with Vitest, flows with Playwright on
    desktop + phone). All tests must pass before finishing. Never skip or
    disable a test to get green.
-6. **Update `PROGRESS.md`:** done, next, known issues.
+6. **Update `PROGRESS.md`** in `tailarr-notes`: done, next, known issues.
 7. **Pull request** with: what was built, how to check it (step-by-step in
    plain English), questions, and screenshots where there is UI.
 8. **Finish** with a short plain-English summary for the owner: what you

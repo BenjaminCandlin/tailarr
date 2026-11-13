@@ -13,6 +13,7 @@
 Map /data exactly the same way as in Radarr and Sonarr (TRaSH Guides layout), so file paths match.</Overview>
   <Category>MediaApp:Video Tools:</Category>
   <WebUI>http://[IP]:[PORT:8484]/</WebUI>
+  <TemplateURL>https://raw.githubusercontent.com/BenjaminCandlin/tailarr/main/unraid/tailarr.xml</TemplateURL>
   <Icon>https://raw.githubusercontent.com/BenjaminCandlin/tailarr/main/frontend/public/icon-256.png</Icon>
   <ExtraParams/>
   <PostArgs/>
