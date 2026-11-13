@@ -108,8 +108,12 @@ class CopyPlan:
                 out.append((track, lines))
         return out
 
-    def mkvmerge_options(self) -> list[str]:
-        """Which tracks to copy and their settings (track numbers as mkvmerge counts them)."""
+    def mkvmerge_options(self, skip: frozenset[int] = frozenset()) -> list[str]:
+        """Which tracks to copy and their settings (track numbers as mkvmerge counts them).
+
+        Tracks in `skip` (by mkvmerge number) get no setting options: the HDR10 copy brings
+        its video in from a separate file and sets that track's options itself.
+        """
         options: list[str] = []
         for kind, keep, none in (
             ("audio", "--audio-tracks", "--no-audio"),
@@ -120,6 +124,8 @@ class CopyPlan:
             ids = [str(t.id) for t in self.kept if t.type == kind]
             options += [keep, ",".join(ids)] if ids else [none]
         for track in self.kept:
+            if track.id in skip:
+                continue
             want = self.wanted(track)
             if want.default != track.default:
                 options += ["--default-track-flag", f"{track.id}:{int(want.default)}"]
@@ -130,7 +136,15 @@ class CopyPlan:
         return options
 
 
-def plan_copy(details: MediaDetails, remove: list[str], changes: list[TrackChange]) -> CopyPlan:
+def plan_copy(
+    details: MediaDetails,
+    remove: list[str],
+    changes: list[TrackChange],
+    *,
+    require_removal: bool = True,
+) -> CopyPlan:
+    """Check the choices for a copy. `require_removal=False`: copies that only change
+    settings (or only remove Dolby Vision) are fine too."""
     by_uid = {t.uid: t for t in details.tracks if t.uid}
     missing = [uid for uid in [*remove, *(c.uid for c in changes)] if uid not in by_uid]
     if missing:
@@ -139,7 +153,7 @@ def plan_copy(details: MediaDetails, remove: list[str], changes: list[TrackChang
             "(perhaps Radarr replaced the file). Open the film again and choose again."
         )
     removing = set(remove)
-    if not removing:
+    if not removing and require_removal:
         raise CopyRefusedError("Untick at least one track to leave out of the copy.")
     if any(by_uid[uid].type == "video" for uid in removing):
         raise CopyRefusedError("Video tracks can't be removed, only audio and subtitle tracks.")
@@ -262,10 +276,15 @@ def make_job_type(
         before = check_file(source, allowed_roots())
         details = read_tracks(source)
         try:
-            plan = plan_copy(details, remove, changes)
+            plan = plan_copy(
+                details, remove, changes, require_removal=not ctx.params.get("update_copy")
+            )
         except (TracksChangedError, CopyRefusedError) as exc:
             raise JobFailed(str(exc)) from exc
         final = folder / output_name(Path(source).name)
+        if ctx.params.get("update_copy") and is_tailarr_copy(Path(source).name):
+            # Batch "also change copies": update one of Tailarr's copies where it is.
+            final, overwrite = Path(source), True
         updating_copy = final == Path(source)
         if final.exists():
             if not is_tailarr_copy(final.name):

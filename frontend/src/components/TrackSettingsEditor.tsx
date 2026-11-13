@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { ConfirmSummary } from "@/components/ConfirmSummary";
 import { CopySummary } from "@/components/CopySummary";
+import { Hdr10Summary } from "@/components/DolbyVisionAction";
 import { JobFollow, type JobWords } from "@/components/JobFollow";
 import { ReplaceOriginalDialog } from "@/components/ReplaceOriginalDialog";
 import { TrackTable, type TrackEditing, type TrackValues } from "@/components/TrackTable";
@@ -12,6 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import {
   api,
   type ItemRef,
+  type Hdr10CopyPreview,
   type Job,
   type RemoveTracksPreview,
   type Track,
@@ -123,7 +125,15 @@ const COPY_WORDS: JobWords = {
   afterFailure: "Your original wasn't changed, and your choices are still on the page.",
 };
 
-type Started = { id: number; kind: "settings" | "copy" };
+const HDR10_WORDS: JobWords = {
+  running: "Making the HDR10 copy with your track changes",
+  done: "HDR10 copy saved",
+  failed: "Couldn't make the HDR10 copy",
+  cancelled: "The HDR10 copy wasn't made",
+  afterFailure: "Your original wasn't changed, and your choices are still on the page.",
+};
+
+type Started = { id: number; kind: "settings" | "copy" | "hdr10" };
 
 /**
  * The track tables with Keep ticks, Default/Forced switches and rename buttons, and a
@@ -136,10 +146,13 @@ export function TrackSettingsEditor({
   file,
   tracks,
   onOpenFile,
+  canRemoveDv = false,
 }: {
   item: ItemRef;
   file: string;
   tracks: Track[];
+  /** The file has Dolby Vision that can be removed: offer doing it in the same copy. */
+  canRemoveDv?: boolean;
   /** Show another of the film's files (e.g. the new copy). */
   onOpenFile?: (name: string) => void;
 }) {
@@ -153,6 +166,8 @@ export function TrackSettingsEditor({
   const [started, setStarted] = useState<Started | null>(null);
   const [running, setRunning] = useState(false);
   const [replacing, setReplacing] = useState<string | null>(null);
+  const [withoutDv, setWithoutDv] = useState(false);
+  const [hdr10Preview, setHdr10Preview] = useState<Hdr10CopyPreview | null>(null);
 
   const copyMode = removed.length > 0;
   const changes = changesFrom(tracks, draft).filter((c) => !removed.includes(c.uid));
@@ -171,11 +186,20 @@ export function TrackSettingsEditor({
       setCopyPreview(data);
     },
   });
-  const check = copyMode ? checkCopy : checkSettings;
+  const checkHdr10 = useMutation({
+    mutationFn: () => api.previewHdr10Copy(item, file, { remove: removed, changes }),
+    onSuccess: (data) => {
+      setOverwrite(false);
+      setHdr10Preview(data);
+    },
+  });
+  const hdr10Mode = canRemoveDv && withoutDv;
+  const check = hdr10Mode ? checkHdr10 : copyMode ? checkCopy : checkSettings;
 
   function begin(job: Job, kind: Started["kind"]) {
     setSettingsPreview(null);
     setCopyPreview(null);
+    setHdr10Preview(null);
     setStarted({ id: job.id, kind });
     setRunning(true);
     void queryClient.invalidateQueries({ queryKey: ["jobs"] });
@@ -189,6 +213,10 @@ export function TrackSettingsEditor({
         allow_hardlinked: understood,
       }),
     onSuccess: (job) => begin(job, "settings"),
+  });
+  const saveHdr10 = useMutation({
+    mutationFn: () => api.hdr10Copy(item, file, overwrite, { remove: removed, changes }),
+    onSuccess: (job) => begin(job, "hdr10"),
   });
   const saveCopy = useMutation({
     mutationFn: () =>
@@ -267,10 +295,16 @@ export function TrackSettingsEditor({
         <JobFollow
           key={started.id}
           jobId={started.id}
-          words={started.kind === "copy" ? COPY_WORDS : SETTINGS_WORDS}
+          words={
+            started.kind === "hdr10"
+              ? HDR10_WORDS
+              : started.kind === "copy"
+                ? COPY_WORDS
+                : SETTINGS_WORDS
+          }
           onFinished={onFinished}
           doneExtra={(job) =>
-            started.kind === "copy" && job.result?.copy ? (
+            started.kind !== "settings" && job.result?.copy ? (
               <div className="flex flex-col gap-2 sm:flex-row">
                 {onOpenFile && job.result.copy !== file && (
                   <Button variant="secondary" onClick={() => onOpenFile(job.result!.copy)}>
@@ -303,10 +337,25 @@ export function TrackSettingsEditor({
                     .join(", ")
                 : `${plural(changes.length, "track")} changed, not saved yet`}
             </p>
-            {copyMode && (
+            {(copyMode || hdr10Mode) && (
               <p className="text-muted-foreground">
-                Saved as a new copy next to the original. Your original stays as it is.
+                {hdr10Mode
+                  ? "Saved as an HDR10 copy (without Dolby Vision) with these changes, in one go."
+                  : "Saved as a new copy next to the original."}{" "}
+                Your original stays as it is.
               </p>
+            )}
+            {canRemoveDv && (
+              <label className="mt-1 flex min-h-11 cursor-pointer items-center gap-3 font-medium">
+                <Checkbox
+                  checked={withoutDv}
+                  onCheckedChange={(checked) => {
+                    setWithoutDv(checked === true);
+                    checkHdr10.reset();
+                  }}
+                />
+                Also remove Dolby Vision (make an HDR10 copy)
+              </label>
             )}
             {check.isError && (
               <p role="alert" className="text-destructive">
@@ -320,23 +369,48 @@ export function TrackSettingsEditor({
               onClick={() => {
                 setDraft({});
                 setRemoved([]);
+                setWithoutDv(false);
                 checkSettings.reset();
                 checkCopy.reset();
+                checkHdr10.reset();
               }}
             >
               <Undo2 aria-hidden />
               Undo changes
             </Button>
             <Button onClick={() => check.mutate()} disabled={check.isPending}>
-              {copyMode && <Copy aria-hidden />}
+              {(copyMode || hdr10Mode) && <Copy aria-hidden />}
               {check.isPending
                 ? "Checking…"
-                : copyMode
-                  ? "Save a copy without the unticked tracks"
-                  : "Save track changes"}
+                : hdr10Mode
+                  ? "Save an HDR10 copy with these changes"
+                  : copyMode
+                    ? "Save a copy without the unticked tracks"
+                    : "Save track changes"}
             </Button>
           </div>
         </div>
+      )}
+
+      {hdr10Preview && (
+        <ConfirmSummary
+          open
+          onOpenChange={(open) => {
+            if (!open) {
+              setHdr10Preview(null);
+              saveHdr10.reset();
+            }
+          }}
+          title="Make an HDR10 copy with these changes?"
+          description="A new file is made next to the original, without Dolby Vision and with your track changes. Your original isn't changed."
+          confirmLabel="Make the copy"
+          onConfirm={() => saveHdr10.mutate()}
+          confirmDisabled={!hdr10Preview.enough_space || (hdr10Preview.exists && !overwrite)}
+          pending={saveHdr10.isPending}
+          error={saveHdr10.isError ? saveHdr10.error.message : null}
+        >
+          <Hdr10Summary preview={hdr10Preview} overwrite={overwrite} onOverwrite={setOverwrite} />
+        </ConfirmSummary>
       )}
 
       {settingsPreview && (

@@ -23,7 +23,7 @@ def get_runner(request: Request) -> AutoRunner:
 
 
 class AutomationIn(BaseModel):
-    settle_seconds: int = Field(default=60, ge=0, le=3600)
+    settle_seconds: int = Field(default=120, ge=0, le=3600)
     watch_folders: bool = False
     rescan_minutes: int = Field(default=15, ge=5, le=1440)
 

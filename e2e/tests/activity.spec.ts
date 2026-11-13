@@ -31,7 +31,7 @@ test("the activity log opens from the Rules page and filters", async ({
 
 test("automatic rules settings", async ({ page }) => {
   await page.goto("/settings");
-  await expect(page.getByLabel(/stopped changing for/)).toHaveValue("60");
+  await expect(page.getByLabel(/stopped changing for/)).toHaveValue("120");
   await expect(
     page.getByRole("switch", { name: /watch the Films and TV folders/ }),
   ).not.toBeChecked();

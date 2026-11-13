@@ -263,6 +263,10 @@ export type Hdr10CopyPreview = {
   /** What players show the copy as, e.g. ["HDR10"] or ["HDR10+", "HDR10"]. */
   result: string[];
   kept: string[];
+  /** Tracks also left out, and setting changes, when made together with the HDR10 copy. */
+  removed: string[];
+  settings: { label: string; changes: string[] }[];
+  warnings: string[];
   chapters: number;
   attachments: number;
   uses_work_folder: boolean;
@@ -339,7 +343,17 @@ export type LanguageChoice = {
 };
 
 export type BatchAction =
-  | { type: "hdr10_copy"; overwrite?: boolean }
+  | {
+      type: "hdr10_copy";
+      overwrite?: boolean;
+      /** Optional track changes made in the same copy. */
+      audio?: LanguageChoice;
+      subtitles?: LanguageChoice;
+      remove_commentary?: boolean;
+      default_audio?: string | null;
+      default_subtitles?: "keep" | "off" | "language";
+      default_subtitle_language?: string | null;
+    }
   | {
       type: "remove_tracks";
       audio: LanguageChoice;
@@ -359,6 +373,8 @@ export type BatchRequest = {
   season: number | null;
   action: BatchAction;
   allow_hardlinked: boolean;
+  /** Also change the copies Tailarr made of these episodes (updated where they are). */
+  include_copies?: boolean;
 };
 
 export type BatchFile = {
@@ -370,6 +386,9 @@ export type BatchFile = {
   reason: string | null;
   hardlinked: boolean;
   new_file: string | null;
+  is_copy: boolean;
+  /** Worth a look: e.g. no subtitles (or no audio) would be left. */
+  warnings: string[];
 };
 
 export type BatchPreview = {
@@ -381,6 +400,8 @@ export type BatchPreview = {
   will_run: number;
   skipped: number;
   hardlinked_skipped: number;
+  flagged: number;
+  copies: number;
   space: { label: string; needed: number; free: number; enough: boolean }[];
   enough_space: boolean;
 };
@@ -464,6 +485,8 @@ export type RuleInput = {
   enabled: boolean;
   scope: "films" | "tv" | "both";
   conditions: Condition[];
+  /** "all": every condition must be true; "any": one is enough. */
+  match: "all" | "any";
   action: BatchAction;
   /** Rules never change original files unless this is ticked. */
   allow_originals: boolean;
@@ -505,6 +528,9 @@ export type RulePreview = {
   space: { label: string; needed: number; free: number; enough: boolean }[];
   enough_space: boolean;
 };
+
+/** Track changes made in the same pass as removing Dolby Vision. */
+export type Hdr10TrackChoices = { remove?: string[]; changes?: TrackChange[] };
 
 export type RecycleSettings = { keep_days: number; file_count: number; total_size: number };
 
@@ -633,15 +659,15 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ copy_file: copyFile, confirmed: true, understood: true }),
     }),
-  previewHdr10Copy: (item: ItemRef, file: string) =>
+  previewHdr10Copy: (item: ItemRef, file: string, tracks: Hdr10TrackChoices = {}) =>
     request<Hdr10CopyPreview>(`${itemPath(item)}/hdr10-copy/preview`, {
       method: "POST",
-      body: JSON.stringify({ file }),
+      body: JSON.stringify({ file, ...tracks }),
     }),
-  hdr10Copy: (item: ItemRef, file: string, overwrite: boolean) =>
+  hdr10Copy: (item: ItemRef, file: string, overwrite: boolean, tracks: Hdr10TrackChoices = {}) =>
     request<Job>(`${itemPath(item)}/hdr10-copy`, {
       method: "POST",
-      body: JSON.stringify({ file, confirmed: true, overwrite }),
+      body: JSON.stringify({ file, confirmed: true, overwrite, ...tracks }),
     }),
   shows: () => request<ShowList>("/api/tv"),
   show: (id: number | string) => request<ShowDetail>(`/api/tv/shows/${id}`),

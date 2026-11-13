@@ -186,6 +186,9 @@ export function FileContents({
           item={edit.item}
           file={edit.file}
           tracks={data.tracks}
+          canRemoveDv={Boolean(
+            data.hdr?.formats.includes("Dolby Vision") && data.hdr.can_remove_dv,
+          )}
           onOpenFile={edit.onOpenFile}
         />
       ) : (

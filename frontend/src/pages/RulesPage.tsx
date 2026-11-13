@@ -32,6 +32,7 @@ export const EXAMPLES: { label: string; rule: RuleInput }[] = [
       action: { type: "hdr10_copy", overwrite: false },
       allow_originals: false,
       allow_hardlinked: false,
+      match: "all",
     },
   },
   {
@@ -50,6 +51,7 @@ export const EXAMPLES: { label: string; rule: RuleInput }[] = [
       },
       allow_originals: false,
       allow_hardlinked: false,
+      match: "all",
     },
   },
 ];

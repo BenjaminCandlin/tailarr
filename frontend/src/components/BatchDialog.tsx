@@ -47,7 +47,19 @@ function PreviewSummary({
         <span className="font-medium">{plural(preview.will_run, "episode")}</span> will{" "}
         {preview.changes_originals ? "be changed" : "get a copy"}
         {skipped.length > 0 && <>, {skipped.length} skipped</>}.
+        {preview.flagged > 0 && (
+          <span className="font-medium text-warning">
+            {" "}
+            {plural(preview.flagged, "file")} flagged: see below.
+          </span>
+        )}
       </p>
+      {preview.copies > 0 && !preview.files.some((f) => f.is_copy) && (
+        <p className="text-muted-foreground">
+          These episodes also have {plural(preview.copies, "copy", "copies")} made by Tailarr, which
+          are left as they are. Go back and tick “Also change the copies” to change them too.
+        </p>
+      )}
       {preview.changes_originals && running.length > 0 && (
         <div className="flex gap-2 rounded-lg border border-destructive/40 bg-destructive-soft p-3 text-destructive">
           <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
@@ -79,7 +91,7 @@ function PreviewSummary({
           </p>
           <ul className="flex flex-col gap-1.5" aria-label="Episodes that will change">
             {running.map((file) => (
-              <li key={file.episode_id} className="rounded-lg border px-3 py-2">
+              <li key={`${file.episode_id}-${file.file}`} className="rounded-lg border px-3 py-2">
                 <p className="font-medium [overflow-wrap:anywhere]">{file.label}</p>
                 {file.new_file && (
                   <p className="text-xs text-muted-foreground [overflow-wrap:anywhere]">
@@ -93,23 +105,43 @@ function PreviewSummary({
                     </li>
                   ))}
                 </ul>
+                {file.warnings.map((warning) => (
+                  <p
+                    key={warning}
+                    className="mt-1 flex gap-1.5 font-medium text-warning"
+                    data-testid="batch-warning"
+                  >
+                    <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
+                    {warning}
+                  </p>
+                ))}
               </li>
             ))}
           </ul>
         </div>
       )}
       {skipped.length > 0 && (
-        <details className="rounded-lg border px-3 py-2" open={running.length === 0}>
+        <details
+          className="rounded-lg border px-3 py-2"
+          open={running.length === 0 || skipped.some((f) => f.warnings.length > 0)}
+        >
           <summary className="min-h-9 cursor-pointer py-1 font-medium">
             Skipped ({skipped.length})
           </summary>
           <ul className="mt-1 flex flex-col gap-2" aria-label="Skipped episodes">
             {skipped.map((file) => (
-              <li key={file.episode_id} className="flex gap-2">
+              <li key={`${file.episode_id}-${file.file}`} className="flex gap-2">
                 <MinusCircle className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
                 <span className="[overflow-wrap:anywhere]">
                   <span className="font-medium">{file.label}</span>
-                  <span className="text-muted-foreground"> – {file.reason}</span>
+                  <span
+                    className={
+                      file.warnings.length ? "font-medium text-warning" : "text-muted-foreground"
+                    }
+                  >
+                    {" "}
+                    – {file.reason}
+                  </span>
                 </span>
               </li>
             ))}
@@ -162,12 +194,14 @@ export function BatchDialog({
   const [step, setStep] = useState<Step>("choose");
   const [choices, setChoices] = useState<Choices>(START);
   const [allowHardlinked, setAllowHardlinked] = useState(false);
+  const [includeCopies, setIncludeCopies] = useState(false);
   const [started, setStarted] = useState<BatchStarted | null>(null);
 
   const request = (allow = allowHardlinked): BatchRequest => ({
     season,
     action: actionOf(choices),
     allow_hardlinked: allow,
+    include_copies: includeCopies,
   });
   const preview = useMutation({
     mutationFn: (allow: boolean) => api.previewBatch(showId, request(allow)),
@@ -202,6 +236,21 @@ export function BatchDialog({
         />
         <div className="rounded-xl border p-3">
           <ActionOptions choices={choices} set={set} />
+        </div>
+        <div className="rounded-xl border p-3">
+          <Tick
+            checked={includeCopies}
+            onChange={(value) => {
+              setIncludeCopies(value);
+              preview.reset();
+            }}
+          >
+            Also change the copies Tailarr made of these episodes, not just the originals
+          </Tick>
+          <p className="pl-8 text-xs text-muted-foreground">
+            For example, after making HDR10 copies: change the copies' tracks too, so both versions
+            match. Copies are updated where they are (no copy of a copy is made).
+          </p>
         </div>
         {missing && <p className="text-muted-foreground">{missing}</p>}
       </>

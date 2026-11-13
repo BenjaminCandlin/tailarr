@@ -39,8 +39,8 @@ from ..library.naming import is_tailarr_copy
 from ..media.probe import MediaDetails, ReadError, Track, describe, read_file
 from .engine import JobContext, JobFailed, JobType
 from .models import CopyRecord
-from .remove_tracks import place_new_file
-from .track_settings import check_file, track_label
+from .remove_tracks import CopyPlan, CopyRefusedError, Wanted, place_new_file, plan_copy
+from .track_settings import TrackChange, TracksChangedError, check_file, track_label
 
 KIND = "hdr10_copy"
 TITLE = "Make a copy without Dolby Vision"
@@ -73,20 +73,40 @@ class Hdr10Plan:
     video: Track  # the main (base layer) video track
     remove_rpu: bool  # False: the Dolby Vision layer is a separate track, simply left out
     dropped: list[Track]  # other video tracks left out (Dolby Vision enhancement layers)
-    kept_others: list[Track] = field(default_factory=list)  # every track except `video`
+    kept_others: list[Track] = field(default_factory=list)  # every kept track except `video`
     expected_formats: list[str] = field(default_factory=list)  # e.g. ["HDR10+", "HDR10"]
+    # Track changes made in the same copy: tracks left out and new settings (may be none).
+    tracks: CopyPlan | None = None
 
     @property
     def kept(self) -> list[Track]:
         """Every track of the original that the copy has, in order."""
-        return [t for t in self.source.tracks if t not in self.dropped]
+        removed = self.tracks.removed if self.tracks else []
+        return [t for t in self.source.tracks if t not in self.dropped and t not in removed]
+
+    def wanted(self, track: Track) -> Wanted:
+        if self.tracks is None:
+            return Wanted(track.default, track.forced, track.name)
+        return self.tracks.wanted(track)
+
+    @property
+    def changes_tracks(self) -> bool:
+        return bool(self.tracks and (self.tracks.removed or self.tracks.setting_changes()))
 
     @property
     def profile(self) -> str:
         return self.source.hdr.dv_label or "?"
 
 
-def plan_hdr10(details: MediaDetails) -> Hdr10Plan:
+def plan_hdr10(
+    details: MediaDetails,
+    remove: list[str] | None = None,
+    changes: list[TrackChange] | None = None,
+) -> Hdr10Plan:
+    """What the HDR10 copy needs; `remove`/`changes` also change tracks in the same copy.
+
+    Raises Hdr10Refused, or TracksChangedError / CopyRefusedError for the track choices.
+    """
     hdr = details.hdr
     if hdr.dv_profile is None:
         raise Hdr10Refused(NO_DV)
@@ -102,13 +122,17 @@ def plan_hdr10(details: MediaDetails) -> Hdr10Plan:
     remove_rpu = bool(main.hdr and main.hdr.dv_profile)
     if not remove_rpu and not dropped:
         raise Hdr10Refused(CANT_REMOVE)  # Dolby Vision found, but not where expected
+    tracks = plan_copy(details, list(remove or []), list(changes or []), require_removal=False)
     return Hdr10Plan(
         source=details,
         video=main,
         remove_rpu=remove_rpu,
         dropped=dropped,
-        kept_others=[t for t in details.tracks if t is not main and t not in dropped],
+        kept_others=[
+            t for t in details.tracks if t is not main and t not in dropped and t in tracks.kept
+        ],
         expected_formats=[f for f in hdr.formats if f != "Dolby Vision"],
+        tracks=tracks,
     )
 
 
@@ -157,17 +181,21 @@ def mkvmerge_args(plan: Hdr10Plan, source: str, video: str, timestamps: str, out
     args = ["-o", out]
     if plan.source.title:
         args += ["--title", plan.source.title]
+    track_options = plan.tracks.mkvmerge_options if plan.tracks else (lambda skip=None: [])
     if not plan.remove_rpu:
         # The Dolby Vision layer is its own track: copy everything except that track.
         keep_video = [t for t in plan.source.of_type("video") if t not in plan.dropped]
-        args += ["--video-tracks", ",".join(str(t.id) for t in keep_video), source]
+        args += ["--video-tracks", ",".join(str(t.id) for t in keep_video)]
+        args += track_options()
+        args.append(source)
         return args
     v = plan.video
+    want = plan.wanted(v)
     args += ["--timestamps", f"0:{timestamps}", "--language", f"0:{v.language}"]
-    if v.name:
-        args += ["--track-name", f"0:{v.name}"]
-    args += ["--default-track-flag", f"0:{int(v.default)}"]
-    if v.forced:
+    if want.name:
+        args += ["--track-name", f"0:{want.name}"]
+    args += ["--default-track-flag", f"0:{int(want.default)}"]
+    if want.forced:
         args += ["--forced-display-flag", "0:1"]
     display = v.display_dimensions
     if display:
@@ -178,6 +206,7 @@ def mkvmerge_args(plan: Hdr10Plan, source: str, video: str, timestamps: str, out
         args += ["--video-tracks", ",".join(str(t.id) for t in other_video)]
     else:
         args.append("--no-video")
+    args += track_options(frozenset({v.id}))  # tracks left out, and new settings
     args.append(source)
     return args
 
@@ -202,10 +231,11 @@ def verify_hdr10(copy: MediaDetails, plan: Hdr10Plan) -> list[str]:
         problems.append(
             f"Picture size {new_video.width}x{new_video.height}, expected {src.width}x{src.height}"
         )
+    src_want = plan.wanted(src)
     if (new_video.language, new_video.name, new_video.default) != (
         src.language,
-        src.name,
-        src.default,
+        src_want.name,
+        src_want.default,
     ):
         problems.append("The video track's language, name or default setting changed")
     if plan.remove_rpu:
@@ -218,7 +248,8 @@ def verify_hdr10(copy: MediaDetails, plan: Hdr10Plan) -> list[str]:
     else:
         for track, expected in zip(got, want, strict=True):
             settings = (track.default, track.forced, track.name, track.language)
-            wanted = (expected.default, expected.forced, expected.name, expected.language)
+            w = plan.wanted(expected)
+            wanted = (w.default, w.forced, w.name, expected.language)
             if settings != wanted:
                 problems.append(f"{track_label(expected, plan.source)}: settings changed")
     source_length, copy_length = plan.source.duration, copy.duration
@@ -260,11 +291,19 @@ def make_job_type(
         before = check_file(source, allowed_roots())
         details = read_full(source)
         try:
-            plan = plan_hdr10(details)
-        except Hdr10Refused as exc:
+            plan = plan_hdr10(
+                details,
+                list(ctx.params.get("remove", [])),
+                [TrackChange(**c) for c in ctx.params.get("changes", [])],
+            )
+        except (Hdr10Refused, TracksChangedError, CopyRefusedError) as exc:
             raise JobFailed(str(exc)) from exc
-        final = film_folder / output_name(Path(source).name)
-        if final.exists():
+        # Updating one of Tailarr's own copies in place (batch "also change copies").
+        update_copy = bool(ctx.params.get("update_copy")) and is_tailarr_copy(Path(source).name)
+        final = Path(source) if update_copy else film_folder / output_name(Path(source).name)
+        if update_copy:
+            overwrite = True
+        elif final.exists():
             if not is_tailarr_copy(final.name):
                 raise JobFailed(
                     f"A file called “{final.name}” is already there and it isn't a "
@@ -350,28 +389,46 @@ def make_job_type(
         apply_umask(final)
         with Session(engine) as session:
             existing = session.get(CopyRecord, str(final))
-            if existing is not None:
-                session.delete(existing)
-                session.flush()
-            session.add(
-                CopyRecord(
-                    path=str(final),
-                    source_path=source,
-                    source_size=before.st_size,
-                    source_mtime=before.st_mtime,
-                    kind=KIND,
-                    created_at=os.stat(final).st_mtime,
-                    job_id=ctx.job_id,
+            if update_copy:
+                # Still a copy of the same original, but now without Dolby Vision: replacing
+                # the original with it must warn that Dolby Vision would be gone.
+                if existing is not None:
+                    existing.kind = KIND
+                    session.add(existing)
+            else:
+                if existing is not None:
+                    session.delete(existing)
+                    session.flush()
+                session.add(
+                    CopyRecord(
+                        path=str(final),
+                        source_path=source,
+                        source_size=before.st_size,
+                        source_mtime=before.st_mtime,
+                        kind=KIND,
+                        created_at=os.stat(final).st_mtime,
+                        job_id=ctx.job_id,
+                    )
                 )
-            )
             session.commit()
         folder_changed(str(film_folder))
 
         ctx.result = {"copy": final.name, "source": Path(source).name}
         shows = " and ".join(plan.expected_formats) or "HDR10"
+        extra = ""
+        if plan.tracks and plan.tracks.removed:
+            count = len(plan.tracks.removed)
+            extra += f" {count} track{'s' if count != 1 else ''} left out."
+        if plan.tracks and plan.tracks.setting_changes():
+            extra += " Track settings changed in the copy."
+        if update_copy:
+            return (
+                f"Dolby Vision removed from Tailarr's copy “{final.name}”. Players without "
+                f"Dolby Vision show it as {shows}.{extra} Your original wasn't changed."
+            )
         return (
             f"HDR10 copy saved as “{final.name}”. Players without Dolby Vision show it "
-            f"as {shows}. Your original wasn't changed."
+            f"as {shows}.{extra} Your original wasn't changed."
         )
 
     return JobType(kind=KIND, run=run)

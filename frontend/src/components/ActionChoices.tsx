@@ -45,6 +45,8 @@ export type Choices = {
   defaultAudio: string | null;
   defaultSubtitles: "keep" | "off" | "language";
   defaultSubtitleLanguage: string | null;
+  /** HDR10 copies: also change tracks in the same copy. */
+  hdr10Tracks: boolean;
 };
 
 export const START: Choices = {
@@ -58,10 +60,27 @@ export const START: Choices = {
   defaultAudio: null,
   defaultSubtitles: "keep",
   defaultSubtitleLanguage: null,
+  hdr10Tracks: false,
 };
 
 export function actionOf(c: Choices): BatchAction {
-  if (c.kind === "hdr10_copy") return { type: "hdr10_copy", overwrite: c.overwrite };
+  if (c.kind === "hdr10_copy") {
+    if (!c.hdr10Tracks) return { type: "hdr10_copy", overwrite: c.overwrite };
+    return {
+      type: "hdr10_copy",
+      overwrite: c.overwrite,
+      audio: { mode: c.audioMode, languages: c.audioMode === "only" ? c.audioLanguages : [] },
+      subtitles: {
+        mode: c.subtitleMode,
+        languages: c.subtitleMode === "only" ? c.subtitleLanguages : [],
+      },
+      remove_commentary: c.removeCommentary,
+      default_audio: c.defaultAudio,
+      default_subtitles: c.defaultSubtitles,
+      default_subtitle_language:
+        c.defaultSubtitles === "language" ? c.defaultSubtitleLanguage : null,
+    };
+  }
   if (c.kind === "remove_tracks") {
     return {
       type: "remove_tracks",
@@ -91,6 +110,14 @@ export function missingChoice(c: Choices): string | null {
       return "Choose at least one audio language to keep.";
     if (c.subtitleMode === "only" && c.subtitleLanguages.length === 0)
       return "Choose at least one subtitle language to keep.";
+  }
+  if (c.kind === "hdr10_copy" && c.hdr10Tracks) {
+    if (c.audioMode === "only" && c.audioLanguages.length === 0)
+      return "Choose at least one audio language to keep.";
+    if (c.subtitleMode === "only" && c.subtitleLanguages.length === 0)
+      return "Choose at least one subtitle language to keep.";
+    if (c.defaultSubtitles === "language" && !c.defaultSubtitleLanguage)
+      return "Choose the subtitle language to show by default.";
   }
   if (c.kind === "default_tracks") {
     if (!c.defaultAudio && c.defaultSubtitles === "keep")
@@ -160,81 +187,23 @@ export function ActionOptions({
         <Tick checked={choices.overwrite} onChange={(v) => set({ overwrite: v })}>
           Replace HDR10 copies Tailarr made before
         </Tick>
+        <Tick checked={choices.hdr10Tracks} onChange={(v) => set({ hdr10Tracks: v })}>
+          Also change tracks in the copies (in the same go, no extra time)
+        </Tick>
+        {choices.hdr10Tracks && (
+          <div className="mt-2 flex flex-col gap-4 border-l-2 border-primary/40 pl-4">
+            <KeepOptions choices={choices} set={set} />
+            <DefaultOptions choices={choices} set={set} />
+          </div>
+        )}
       </div>
     );
   }
   if (choices.kind === "remove_tracks") {
     return (
       <div className="flex flex-col gap-4">
-        <fieldset className="flex flex-col gap-1">
-          <legend className="mb-1 font-medium">Audio</legend>
-          <Radio
-            name="audio"
-            checked={choices.audioMode === "all"}
-            onChange={() => set({ audioMode: "all" })}
-          >
-            Keep all audio tracks
-          </Radio>
-          <Radio
-            name="audio"
-            checked={choices.audioMode === "only"}
-            onChange={() => set({ audioMode: "only" })}
-          >
-            Keep only these languages
-          </Radio>
-          {choices.audioMode === "only" && (
-            <div className="pl-8">
-              <LanguagePicker
-                id="batch-audio-languages"
-                label="Add an audio language to keep"
-                value={choices.audioLanguages}
-                onChange={(codes) => set({ audioLanguages: codes })}
-              />
-              <p className="mt-1 text-xs text-muted-foreground">
-                Tracks with no language set, and tracks marked as the original language, are kept
-                too. A file is skipped if it would be left with no sound.
-              </p>
-            </div>
-          )}
-        </fieldset>
-        <fieldset className="flex flex-col gap-1">
-          <legend className="mb-1 font-medium">Subtitles</legend>
-          <Radio
-            name="subs"
-            checked={choices.subtitleMode === "all"}
-            onChange={() => set({ subtitleMode: "all" })}
-          >
-            Keep all subtitles
-          </Radio>
-          <Radio
-            name="subs"
-            checked={choices.subtitleMode === "only"}
-            onChange={() => set({ subtitleMode: "only" })}
-          >
-            Keep only these languages
-          </Radio>
-          {choices.subtitleMode === "only" && (
-            <div className="pl-8">
-              <LanguagePicker
-                id="batch-subtitle-languages"
-                label="Add a subtitle language to keep"
-                value={choices.subtitleLanguages}
-                onChange={(codes) => set({ subtitleLanguages: codes })}
-              />
-            </div>
-          )}
-          <Radio
-            name="subs"
-            checked={choices.subtitleMode === "none"}
-            onChange={() => set({ subtitleMode: "none" })}
-          >
-            Remove all subtitles
-          </Radio>
-        </fieldset>
+        <KeepOptions choices={choices} set={set} />
         <div className="flex flex-col gap-1">
-          <Tick checked={choices.removeCommentary} onChange={(v) => set({ removeCommentary: v })}>
-            Also remove commentary tracks
-          </Tick>
           <Tick checked={choices.overwrite} onChange={(v) => set({ overwrite: v })}>
             Replace “- Tailarr” copies made before
           </Tick>
@@ -242,6 +211,96 @@ export function ActionOptions({
       </div>
     );
   }
+  return <DefaultOptions choices={choices} set={set} />;
+}
+
+/** Which audio and subtitle tracks to keep, by language. */
+function KeepOptions({ choices, set }: { choices: Choices; set: (c: Partial<Choices>) => void }) {
+  return (
+    <>
+      <fieldset className="flex flex-col gap-1">
+        <legend className="mb-1 font-medium">Audio</legend>
+        <Radio
+          name="audio"
+          checked={choices.audioMode === "all"}
+          onChange={() => set({ audioMode: "all" })}
+        >
+          Keep all audio tracks
+        </Radio>
+        <Radio
+          name="audio"
+          checked={choices.audioMode === "only"}
+          onChange={() => set({ audioMode: "only" })}
+        >
+          Keep only these languages
+        </Radio>
+        {choices.audioMode === "only" && (
+          <div className="pl-8">
+            <LanguagePicker
+              id="batch-audio-languages"
+              label="Add an audio language to keep"
+              value={choices.audioLanguages}
+              onChange={(codes) => set({ audioLanguages: codes })}
+            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              Tracks with no language set are left out too. A file that would be left with no sound
+              is skipped and flagged.
+            </p>
+          </div>
+        )}
+      </fieldset>
+      <fieldset className="flex flex-col gap-1">
+        <legend className="mb-1 font-medium">Subtitles</legend>
+        <Radio
+          name="subs"
+          checked={choices.subtitleMode === "all"}
+          onChange={() => set({ subtitleMode: "all" })}
+        >
+          Keep all subtitles
+        </Radio>
+        <Radio
+          name="subs"
+          checked={choices.subtitleMode === "only"}
+          onChange={() => set({ subtitleMode: "only" })}
+        >
+          Keep only these languages
+        </Radio>
+        {choices.subtitleMode === "only" && (
+          <div className="pl-8">
+            <LanguagePicker
+              id="batch-subtitle-languages"
+              label="Add a subtitle language to keep"
+              value={choices.subtitleLanguages}
+              onChange={(codes) => set({ subtitleLanguages: codes })}
+            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              Files that would be left with no subtitles at all are flagged in the summary.
+            </p>
+          </div>
+        )}
+        <Radio
+          name="subs"
+          checked={choices.subtitleMode === "none"}
+          onChange={() => set({ subtitleMode: "none" })}
+        >
+          Remove all subtitles
+        </Radio>
+      </fieldset>
+      <Tick checked={choices.removeCommentary} onChange={(v) => set({ removeCommentary: v })}>
+        Also remove commentary tracks
+      </Tick>
+    </>
+  );
+}
+
+/** Which audio and subtitles players pick by themselves. */
+function DefaultOptions({
+  choices,
+  set,
+}: {
+  choices: Choices;
+  set: (c: Partial<Choices>) => void;
+}) {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-1.5">
@@ -299,8 +358,30 @@ export function ActionOptions({
 
 /** The choices that give back an action (for editing a saved rule). */
 export function choicesFromAction(action: BatchAction): Choices {
-  if (action.type === "hdr10_copy")
-    return { ...START, kind: "hdr10_copy", overwrite: !!action.overwrite };
+  if (action.type === "hdr10_copy") {
+    const tracks = Boolean(
+      (action.audio && action.audio.mode !== "all") ||
+      (action.subtitles && action.subtitles.mode !== "all") ||
+      action.remove_commentary ||
+      action.default_audio ||
+      (action.default_subtitles && action.default_subtitles !== "keep"),
+    );
+    return {
+      ...START,
+      kind: "hdr10_copy",
+      overwrite: !!action.overwrite,
+      hdr10Tracks: tracks,
+      audioMode: action.audio?.mode === "only" ? "only" : tracks ? "all" : START.audioMode,
+      audioLanguages: action.audio?.mode === "only" ? action.audio.languages : START.audioLanguages,
+      subtitleMode: tracks ? (action.subtitles?.mode ?? "all") : START.subtitleMode,
+      subtitleLanguages:
+        action.subtitles?.mode === "only" ? action.subtitles.languages : START.subtitleLanguages,
+      removeCommentary: !!action.remove_commentary,
+      defaultAudio: action.default_audio ?? null,
+      defaultSubtitles: action.default_subtitles ?? "keep",
+      defaultSubtitleLanguage: action.default_subtitle_language ?? null,
+    };
+  }
   if (action.type === "remove_tracks") {
     return {
       ...START,

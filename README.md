@@ -19,7 +19,7 @@ Version 1.0.
   show Dolby Vision with the wrong colours. Profile 5 is refused (it would show wrong
   colours).
 - **Save a copy without some tracks** (`Film - Tailarr.mkv`): untick the audio or
-  subtitle tracks you don't want.
+  subtitle tracks you don't want. Tick **Also remove Dolby Vision** to do both in one go.
 - **Change track settings** (default / forced / names) in the file itself.
 - **Replace the original with a copy**, with the original kept in a hidden recycle
   folder for 30 days.
@@ -67,8 +67,10 @@ Version 1.0.
 The image is `ghcr.io/benjamincandlin/tailarr:latest` and is rebuilt automatically every
 time a change is merged. To update, use **Check for Updates** on Unraid's Docker page.
 
-Optional: add a path `/work` (for example on a cache drive) for HDR10 copies' big
-working files; otherwise they're made next to the film.
+Optional: fill in **Work folder (optional)** (or add a path with container path `/work`)
+pointing at a folder on a fast SSD, for example `/mnt/cache/tailarr-work`. HDR10 copies
+are then much quicker, because their big working files stay off the array. Settings →
+**Work folder** shows whether it's set up and explains each step.
 
 ## First steps
 

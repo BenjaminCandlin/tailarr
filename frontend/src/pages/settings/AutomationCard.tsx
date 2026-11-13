@@ -57,7 +57,7 @@ function AutomationForm({ initial }: { initial: Automation }) {
         />
         <p className="text-xs text-muted-foreground">
           So rules never touch a file that's still being copied. MKVToolNix must also be able to
-          read it. 60 seconds is plenty for most setups.
+          read it. 120 seconds (2 minutes) is a safe choice.
         </p>
       </div>
       <div className="flex items-start gap-3">

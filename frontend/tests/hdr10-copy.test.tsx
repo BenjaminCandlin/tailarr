@@ -16,6 +16,9 @@ const PREVIEW: Hdr10CopyPreview = {
   blu_ray_layers: false,
   result: ["HDR10"],
   kept: ["Audio 1: English – Dolby TrueHD Atmos, 7.1", "Audio 2: French – Dolby Digital, 5.1"],
+  removed: [],
+  settings: [],
+  warnings: [],
   chapters: 12,
   attachments: 1,
   uses_work_folder: false,
@@ -191,5 +194,35 @@ describe("making a copy without Dolby Vision", () => {
     await openFilm();
     await userEvent.click(screen.getByRole("button", { name: "Make an HDR10 copy…" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("nothing to remove");
+  });
+
+  it("removes Dolby Vision and tracks in one go", async () => {
+    const bodies: { remove?: string[]; confirmed?: boolean }[] = [];
+    mockBackend((url, init) => {
+      if (url.endsWith("/hdr10-copy/preview")) {
+        bodies.push(JSON.parse(String(init?.body)));
+        return json({ ...PREVIEW, removed: ["Audio 2: French – Dolby Digital, 5.1"] });
+      }
+      if (url.endsWith("/hdr10-copy")) {
+        bodies.push(JSON.parse(String(init?.body)));
+        return json(job({ id: 8, kind: "hdr10_copy" }), 202);
+      }
+      return undefined;
+    });
+    await openFilm();
+    const frenchKeep = screen.getAllByRole("checkbox", { name: "Keep Audio 2: French" })[0];
+    await userEvent.click(frenchKeep);
+    await userEvent.click(screen.getByRole("checkbox", { name: /Also remove Dolby Vision/ }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Save an HDR10 copy with these changes" }),
+    );
+    const dialog = await screen.findByRole("dialog", {
+      name: "Make an HDR10 copy with these changes?",
+    });
+    expect(within(dialog).getByLabelText("Also left out")).toHaveTextContent("Audio 2: French");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Make the copy" }));
+    await waitFor(() => expect(bodies).toHaveLength(2));
+    expect(bodies[0].remove).toHaveLength(1);
+    expect(bodies[1]).toMatchObject({ confirmed: true, remove: bodies[0].remove });
   });
 });

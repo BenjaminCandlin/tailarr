@@ -10,7 +10,7 @@ import { api, type ItemRef, type Hdr, type Hdr10CopyPreview, type Job } from "@/
 import { refreshLibrary } from "@/lib/jobs";
 import { formatSize, plural } from "@/lib/format";
 
-function Summary({
+export function Hdr10Summary({
   preview,
   overwrite,
   onOverwrite,
@@ -43,13 +43,43 @@ function Summary({
             Dolby Vision show the copy as <span className="text-foreground">{shows}</span>.
           </li>
           <li>
-            Everything else comes across: {plural(preview.kept.length, "other track")},{" "}
-            {plural(preview.chapters, "chapter")}, {plural(preview.attachments, "attachment")}, and
-            the exact frame rate.
+            {preview.removed.length ? "The rest comes across" : "Everything else comes across"}:{" "}
+            {plural(preview.kept.length, "other track")}, {plural(preview.chapters, "chapter")},{" "}
+            {plural(preview.attachments, "attachment")}, and the exact frame rate.
           </li>
           <li>Plex shows the copy as a second version of the film.</li>
         </ul>
       </div>
+      {preview.removed.length > 0 && (
+        <div>
+          <p className="mb-1 font-medium">Also left out of the copy</p>
+          <ul className="list-disc pl-5 text-muted-foreground" aria-label="Also left out">
+            {preview.removed.map((line) => (
+              <li key={line} className="[overflow-wrap:anywhere]">
+                {line}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {preview.settings.length > 0 && (
+        <div>
+          <p className="mb-1 font-medium">Also changed in the copy</p>
+          <ul className="flex flex-col gap-1" aria-label="Also changed in the copy">
+            {preview.settings.map((item) => (
+              <li key={item.label} className="text-muted-foreground">
+                <span className="font-medium text-foreground">{item.label}:</span>{" "}
+                {item.changes.join(", ")}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {preview.warnings.map((warning) => (
+        <p key={warning} className="rounded-lg bg-warning-soft px-3 py-2 text-warning">
+          {warning}
+        </p>
+      ))}
       <details>
         <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
           Tracks in the copy
@@ -174,6 +204,13 @@ export function DolbyVisionAction({
           </Button>
         )}
       </div>
+      {hdr.can_remove_dv && (
+        <p className="text-sm text-muted-foreground">
+          To change tracks in the same copy, untick or change them below and tick{" "}
+          <span className="font-medium text-foreground">Also remove Dolby Vision</span> before
+          saving: it's done in one go.
+        </p>
+      )}
       {!hdr.can_remove_dv && (
         <p className="text-sm text-muted-foreground" data-testid="dv-not-possible">
           Not possible for this file: Dolby Vision profile {hdr.dv_profile} has no HDR10 picture
@@ -226,7 +263,7 @@ export function DolbyVisionAction({
           pending={start.isPending}
           error={start.isError ? start.error.message : null}
         >
-          <Summary preview={preview} overwrite={overwrite} onOverwrite={setOverwrite} />
+          <Hdr10Summary preview={preview} overwrite={overwrite} onOverwrite={setOverwrite} />
         </ConfirmSummary>
       )}
     </section>

@@ -194,3 +194,23 @@ def test_default_tracks_rule_and_seeding_files(
     assert middle["will_run"] is False and middle["hardlinked"] is True
     allowed = app_client.post("/api/rules/preview", json={**rule, "allow_hardlinked": True}).json()
     assert next(i for i in allowed["items"] if "Middle" in i["label"])["will_run"] is True
+
+
+def test_any_conditions(app_client: TestClient) -> None:
+    rule = {
+        "name": "DV or HDR10+",
+        "scope": "films",
+        "match": "any",
+        "conditions": [{"type": "has_dolby_vision"}, {"type": "has_hdr10plus"}],
+        "action": {"type": "hdr10_copy"},
+    }
+    assert describe_rule(RuleIn.model_validate(rule)) == (
+        "When a new film is added, if it has Dolby Vision or it has HDR10+: make a copy "
+        "without Dolby Vision (HDR10 copy)."
+    )
+    any_preview = app_client.post("/api/rules/preview", json=rule).json()
+    all_preview = app_client.post("/api/rules/preview", json={**rule, "match": "all"}).json()
+    # HDR10+ films without Dolby Vision match "any" (and are then skipped: no Dolby Vision).
+    assert any_preview["not_matching"] < all_preview["not_matching"]
+    saved = app_client.post("/api/rules", json=rule).json()
+    assert saved["match"] == "any"
