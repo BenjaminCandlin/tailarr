@@ -1,5 +1,6 @@
 # Builds the Docker image and publishes it to the GitHub Container Registry
-# every time a pull request is merged into main.
+# every time a pull request is merged into main (tag `latest`), and for every
+# release tag like v1.0.0 (tags `1.0.0` and `1.0`, so a version can be pinned).
 #
 # The first publish creates the package as PRIVATE. To let Unraid download it
 # without logging in, make it public once: GitHub > your profile > Packages >
@@ -9,6 +10,7 @@ name: Publish image
 on:
   push:
     branches: [main]
+    tags: ['v*']
   workflow_dispatch:
 
 permissions:
@@ -51,7 +53,9 @@ jobs:
         with:
           images: ${{ env.IMAGE }}
           tags: |
-            type=raw,value=latest
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
             type=sha,prefix=sha-
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}

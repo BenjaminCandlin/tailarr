@@ -184,6 +184,38 @@ def rename_copies_of(
     return renamed
 
 
+def follow_renamed_copy(engine: Engine, previous: str, new: str, moves: dict[str, str]) -> bool:
+    """Radarr/Sonarr renamed one of Tailarr's copies: keep its record with it.
+
+    Without this, a copy renamed without its "- HDR10" ending would look like a second
+    original. Copies made from it follow too. `moves` holds every rename in the same
+    message, so a copy whose original was renamed at the same time points at the new name.
+    Returns False if `previous` isn't one of Tailarr's copies.
+    """
+    with Session(engine) as session:
+        stored = session.get(CopyRecord, previous)
+        if stored is None:
+            return False
+        session.delete(stored)
+        session.flush()
+        session.add(
+            CopyRecord(
+                path=new,
+                source_path=moves.get(stored.source_path, stored.source_path),
+                source_size=stored.source_size,
+                source_mtime=stored.source_mtime,
+                kind=stored.kind,
+                created_at=stored.created_at,
+                job_id=stored.job_id,
+            )
+        )
+        for child in session.exec(select(CopyRecord).where(CopyRecord.source_path == previous)):
+            child.source_path = new
+            session.add(child)
+        session.commit()
+    return True
+
+
 def _recently_logged(engine: Engine, service: str, message: str, seconds: float = 120) -> bool:
     """Radarr/Sonarr send a test message for "Test" and again for "Save": log it once."""
     with Session(engine) as session:
@@ -258,20 +290,36 @@ def handle(
     elif event == "Rename":
         key = "renamedMovieFiles" if service == "radarr" else "renamedEpisodeFiles"
         renamed: list[str] = []
+        followed = 0
         folders: set[str] = set()
+        pairs: list[tuple[str, str]] = []
         for item in payload.get(key) or []:
             previous, new = item.get("previousPath"), item.get("path")
             if not previous or not new:
                 continue
             previous, new = local(previous), local(new)
-            if not inside(new):
-                continue
+            if inside(new):
+                pairs.append((previous, new))
+        moves = dict(pairs)
+        for previous, new in pairs:
             folders |= {str(Path(previous).parent), str(Path(new).parent)}
-            if tidy:
+            if follow_renamed_copy(engine, previous, new, moves):
+                followed += 1  # Radarr/Sonarr renamed one of Tailarr's copies itself
+                record_activity(
+                    engine,
+                    service,
+                    "copy-renamed",
+                    f"{name} renamed Tailarr's copy {Path(previous).name} to "
+                    f"{Path(new).name}. Tailarr still knows it's a copy.",
+                    path=new,
+                )
+            elif tidy:
                 renamed += rename_copies_of(engine, previous, new, roots, service)
         result.message = f"{name} renamed files" + (
             f"; {_copies(len(renamed))} renamed to match" if renamed else ""
         )
+        if followed:
+            result.message += f"; {_copies(followed)} renamed by {name} itself"
         result.folders = sorted(f for f in folders if inside(f))
     elif event in ("MovieDelete", "SeriesDelete"):
         result.message = f"{name} removed {'a film' if service == 'radarr' else 'a show'}."

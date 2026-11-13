@@ -25,10 +25,9 @@ from sqlalchemy import Engine
 from sqlmodel import Session
 
 from ..core.permissions import apply_umask
-from ..library.naming import is_tailarr_copy
 from ..media.probe import MediaDetails, Track
 from .engine import JobContext, JobFailed, JobType
-from .models import CopyRecord
+from .models import CopyRecord, is_copy
 from .track_settings import (
     TrackChange,
     TracksChangedError,
@@ -282,12 +281,12 @@ def make_job_type(
         except (TracksChangedError, CopyRefusedError) as exc:
             raise JobFailed(str(exc)) from exc
         final = folder / output_name(Path(source).name)
-        if ctx.params.get("update_copy") and is_tailarr_copy(Path(source).name):
+        if ctx.params.get("update_copy") and is_copy(engine, source):
             # Batch "also change copies": update one of Tailarr's copies where it is.
             final, overwrite = Path(source), True
         updating_copy = final == Path(source)
         if final.exists():
-            if not is_tailarr_copy(final.name):
+            if not is_copy(engine, final):
                 raise JobFailed(
                     f"A file called “{final.name}” is already there and it isn't a "
                     "copy made by Tailarr, so Tailarr won't replace it."

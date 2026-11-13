@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 from enum import StrEnum
+from pathlib import Path
 
-from sqlmodel import Field, SQLModel
+from sqlalchemy import Engine
+from sqlmodel import Field, Session, SQLModel
+
+from ..library.naming import is_tailarr_copy
 
 # Bump when Job columns change. Old job history is then cleared (it's only history:
 # nothing on disk depends on it, and no job can be running while Tailarr starts).
@@ -84,3 +88,16 @@ class JobGroup(SQLModel, table=True):
     id: str = Field(primary_key=True)
     title: str  # e.g. "Make HDR10 copies: Test Show, Season 1"
     created_at: float
+
+
+def is_recorded_copy(session: Session, path: str) -> bool:
+    """Whether Tailarr's records say `path` is one of its copies (whatever it's called now)."""
+    return session.get(CopyRecord, path) is not None
+
+
+def is_copy(engine: Engine, path: str | Path) -> bool:
+    """One of Tailarr's copies: by its name, or by Tailarr's records if it was renamed."""
+    if is_tailarr_copy(Path(path).name):
+        return True
+    with Session(engine) as session:
+        return is_recorded_copy(session, str(path))

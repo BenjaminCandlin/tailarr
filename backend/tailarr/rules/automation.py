@@ -34,7 +34,7 @@ from ..core.config import AppConfig
 from ..core.paths import is_inside
 from ..core.settings_store import get_library_settings
 from ..jobs.engine import JobQueue, JobType
-from ..jobs.models import Job
+from ..jobs.models import Job, is_copy
 from ..library.media_reader import MediaReader, details_of
 from ..library.models import Episode, EpisodeFile, Film, FilmFile, Show
 from ..library.naming import TEMP_PREFIX, is_tailarr_copy
@@ -110,6 +110,8 @@ class AutoRunner:
         """A new or upgraded file to handle once it has finished copying."""
         path = os.path.normpath(path)
         if not is_candidate_name(path) or not any(is_inside(path, r) for r in self.roots()):
+            return False
+        if is_copy(self._engine, path):  # one of Tailarr's copies, renamed by Radarr/Sonarr
             return False
         with self._lock:
             if path not in self._pending:

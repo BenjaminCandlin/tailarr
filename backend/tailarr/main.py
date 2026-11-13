@@ -33,7 +33,7 @@ from .core.config import AppConfig
 from .core.db import make_engine
 from .core.paths import is_inside
 from .core.settings_store import get_library_settings
-from .jobs import hdr10_copy, remove_tracks, replace_original, track_settings
+from .jobs import hdr10_copy, remove_tracks, replace_original, restore, track_settings
 from .jobs.engine import JobQueue
 from .jobs.recycle import RecycleCleaner
 from .library.media_reader import MediaReader
@@ -154,6 +154,7 @@ def create_app(config: AppConfig | None = None, *, transport: object | None = No
             track_settings.make_job_type(library_roots, file_changed),
             remove_tracks.make_job_type(engine, library_roots, folder_changed),
             replace_original.make_job_type(engine, library_roots, folder_changed),
+            restore.make_job_type(engine, library_roots, folder_changed),
             hdr10_copy.make_job_type(
                 engine, library_roots, lambda: config.work_dir, folder_changed
             ),

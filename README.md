@@ -22,7 +22,7 @@ Version 1.0.
   subtitle tracks you don't want. Tick **Also remove Dolby Vision** to do both in one go.
 - **Change track settings** (default / forced / names) in the file itself.
 - **Replace the original with a copy**, with the original kept in a hidden recycle
-  folder for 30 days.
+  folder for 30 days (and a **Restore** button to undo it).
 - **Change a whole season or show at once**, choosing by language ("keep only English
   subtitles", "make Dolby Vision episodes into HDR10 copies").
 - **Rules** that run by themselves for new films and episodes ("If a new film has
@@ -67,6 +67,12 @@ Version 1.0.
 The image is `ghcr.io/benjamincandlin/tailarr:latest` and is rebuilt automatically every
 time a change is merged. To update, use **Check for Updates** on Unraid's Docker page.
 
+**Staying on one version:** every release also has its own image, for example
+`ghcr.io/benjamincandlin/tailarr:1.0.0` (exactly that version) or
+`ghcr.io/benjamincandlin/tailarr:1.0` (that version plus small fixes). To use one, edit
+the container in Unraid and change the **Repository** field from `…/tailarr:latest` to
+`…/tailarr:1.0.0`. Change it back to `latest` to follow every update again.
+
 Optional: fill in **Work folder (optional)** (or add a path with container path `/work`)
 pointing at a folder on a fast SSD, for example `/mnt/cache/tailarr-work`. HDR10 copies
 are then much quicker, because their big working files stay off the array. Settings →
@@ -102,8 +108,12 @@ are then much quicker, because their big working files stay off the array. Setti
 - **Activity log** (Rules → Activity log): everything rules did, and what Radarr, Sonarr
   and Plex were told.
 - **Recycle folder**: replaced originals and stale copies wait in a hidden
-  `.tailarr-recycle` folder inside their own folder for 30 days (Settings → Recycle
-  folder), then are deleted.
+  `.tailarr-recycle` folder inside their own folder for 30 days, then are deleted.
+  **Settings → Recycle folder** lists them; **Restore** puts one back where it was (if the
+  copy that replaced it is there, the two are swapped, so nothing is lost).
+- **Copies renamed by Radarr/Sonarr**: Tailarr remembers every copy it made, so a copy
+  that Radarr's "Rename Files" renamed (even without its `- HDR10` ending) is still known
+  as a copy, never mistaken for the original.
 
 ## Login
 
@@ -113,7 +123,17 @@ the container → *Add another Path, Port, Variable…*), start it once, then re
 variable again.
 
 Tailarr always refuses changes that don't come from its own page, so other websites
-can't make your browser change your files. Radarr/Sonarr webhooks use a secret instead.
+can't make your browser change your files. Radarr/Sonarr webhooks use a secret instead
+(the secret is hidden in the container log).
+
+**Behind a reverse proxy** (Nginx Proxy Manager, SWAG, Traefik…): the login's "5 wrong
+passwords → 5-minute wait" works per device. By default Tailarr ignores the
+`X-Forwarded-For` address a visitor sends (anyone could make one up to dodge the wait),
+so behind a proxy every visitor looks like the proxy. To let Tailarr see the real
+address, add the variable `TAILARR_TRUSTED_PROXIES` with your proxy's address, for
+example `172.18.0.2` (several: separate with commas; whole networks like
+`172.18.0.0/16` work too). In the Unraid template it's under *Show more settings* as
+**Trusted proxies**.
 
 ## Troubleshooting
 

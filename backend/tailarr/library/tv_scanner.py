@@ -23,7 +23,13 @@ from ..core.paths import is_inside
 from .artwork import find_backdrop, find_poster
 from .models import Episode, EpisodeFile, Show
 from .naming import TEMP_PREFIX, is_video, sort_key
-from .scanner import FoundFile, LibraryFolderMissingError, LibraryScanner, _stat_file
+from .scanner import (
+    FoundFile,
+    LibraryFolderMissingError,
+    LibraryScanner,
+    _stat_file,
+    recorded_copies,
+)
 from .tv_naming import parse_episode, parse_show_folder, season_of_folder, strip_copy_suffix
 
 log = logging.getLogger(__name__)
@@ -59,7 +65,9 @@ class FoundShow:
     backdrop: tuple[str, float] | None
 
 
-def _videos(folder: Path, root: Path) -> tuple[list[FoundFile], list[os.DirEntry[str]]]:
+def _videos(
+    folder: Path, root: Path, copies: dict[str, str] | None = None
+) -> tuple[list[FoundFile], list[os.DirEntry[str]]]:
     """The video files in one folder, and its sub-folders."""
     files: list[FoundFile] = []
     folders: list[os.DirEntry[str]] = []
@@ -85,7 +93,14 @@ def _videos(folder: Path, root: Path) -> tuple[list[FoundFile], list[os.DirEntry
         stat = _stat_file(entry)
         if stat is not None:
             files.append(
-                FoundFile(entry.name, entry.path, stat.st_size, stat.st_mtime, stat.st_nlink)
+                FoundFile(
+                    entry.name,
+                    entry.path,
+                    stat.st_size,
+                    stat.st_mtime,
+                    stat.st_nlink,
+                    copy_of=(copies or {}).get(entry.path),
+                )
             )
     return files, folders
 
@@ -94,7 +109,11 @@ def _group(files: list[FoundFile], folder: Path, folder_season: int | None) -> l
     episodes: dict[str, FoundEpisode] = {}
     # Originals first, so a copy joins its original's episode.
     for f in sorted(files, key=lambda f: (f.is_copy, f.name.casefold())):
-        base = strip_copy_suffix(Path(f.name).stem)
+        # A copy joins the episode of the file it was made from, even if it was renamed.
+        name = f.name
+        if f.copy_of is not None and Path(f.copy_of).parent == folder:
+            name = Path(f.copy_of).name
+        base = strip_copy_suffix(Path(name).stem)
         key = f"{folder}/{base}"
         episode = episodes.get(key)
         if episode is None:
@@ -112,8 +131,8 @@ def _group(files: list[FoundFile], folder: Path, folder_season: int | None) -> l
     return list(episodes.values())
 
 
-def _scan_show(folder: Path, root: Path) -> FoundShow | None:
-    files, subfolders = _videos(folder, root)
+def _scan_show(folder: Path, root: Path, copies: dict[str, str] | None = None) -> FoundShow | None:
+    files, subfolders = _videos(folder, root, copies)
     episodes = _group(files, folder, None)
     for sub in subfolders:
         season = season_of_folder(sub.name)
@@ -121,7 +140,7 @@ def _scan_show(folder: Path, root: Path) -> FoundShow | None:
             continue
         if season is None:
             continue  # not a season folder (extras, artwork, …)
-        season_files, _ = _videos(Path(sub.path), root)
+        season_files, _ = _videos(Path(sub.path), root, copies)
         episodes += _group(season_files, Path(sub.path), season)
     if not episodes:
         return None
@@ -150,7 +169,7 @@ def _scan_show(folder: Path, root: Path) -> FoundShow | None:
     )
 
 
-def find_shows(root: Path) -> list[FoundShow]:
+def find_shows(root: Path, copies: dict[str, str] | None = None) -> list[FoundShow]:
     if not root.is_dir():
         raise LibraryFolderMissingError(
             f"Tailarr can't find your TV folder at {root}. Check the TV folder in Settings, "
@@ -167,7 +186,7 @@ def find_shows(root: Path) -> list[FoundShow]:
             continue
         if not is_inside(entry.path, root):
             continue
-        found = _scan_show(Path(entry.path), root)
+        found = _scan_show(Path(entry.path), root, copies)
         if found:
             shows.append(found)
     return shows
@@ -264,7 +283,7 @@ def rescan_show_folder(session: Session, folder: str, root: Path) -> Show | None
     if show_folder is None:
         return None
     existing = session.exec(select(Show).where(Show.folder == str(show_folder))).first()
-    found = _scan_show(show_folder, root)
+    found = _scan_show(show_folder, root, recorded_copies(session))
     if found is None:
         if existing is not None:
             _delete_show(session, existing)
@@ -282,4 +301,4 @@ class TvScanner(LibraryScanner):
     missing_message = "Tailarr couldn't read your TV folder ({error})."
 
     def find_and_save(self, session: Session, root: Path) -> int:
-        return save_shows(session, find_shows(root))
+        return save_shows(session, find_shows(root, recorded_copies(session)))

@@ -535,6 +535,25 @@ export type Hdr10TrackChoices = { remove?: string[]; changes?: TrackChange[] };
 
 export type RecycleSettings = { keep_days: number; file_count: number; total_size: number };
 
+/** A file waiting in a recycle folder (a replaced original, or a tidied-away copy). */
+export type RecycledFile = {
+  id: number;
+  /** Its own name, which it gets back. */
+  name: string;
+  /** The film or season folder it came from. */
+  folder: string;
+  original_path: string;
+  size: number;
+  recycled_at: string;
+  /** Days until it's deleted for good. */
+  days_left: number;
+  /** Still in the recycle folder (not moved or deleted by hand). */
+  available: boolean;
+  /** A file with its name is there now (usually the copy that replaced it). */
+  clash: boolean;
+  clash_size: number | null;
+};
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -759,6 +778,12 @@ export const api = {
     request<RecycleSettings>("/api/settings/recycle", {
       method: "PUT",
       body: JSON.stringify({ keep_days: keepDays }),
+    }),
+  recycledFiles: () => request<RecycledFile[]>("/api/settings/recycle/files"),
+  restoreRecycled: (id: number, swap: boolean) =>
+    request<Job>(`/api/settings/recycle/files/${id}/restore`, {
+      method: "POST",
+      body: JSON.stringify({ confirmed: true, swap }),
     }),
   jobs: () => request<JobList>("/api/jobs"),
   job: (id: number) => request<Job>(`/api/jobs/${id}`),

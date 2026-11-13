@@ -291,6 +291,7 @@ export function mockBackend(handler?: Handler) {
     if (url.endsWith("/api/settings/library")) return json(LIBRARY);
     if (url.endsWith("/api/settings/recycle"))
       return json({ keep_days: 30, file_count: 0, total_size: 0 });
+    if (url.endsWith("/api/settings/recycle/files")) return json([]);
     if (url.endsWith("/api/jobs/counts")) return json({ running: 0, queued: 0 });
     if (url.endsWith("/api/jobs"))
       return json({ jobs: [], counts: { running: 0, queued: 0 }, groups: [] });

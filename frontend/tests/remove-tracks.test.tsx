@@ -367,7 +367,7 @@ describe("recycle setting", () => {
     renderApp("/settings");
     const box = await screen.findByRole("spinbutton", { name: /Keep replaced originals/ });
     expect(screen.getByTestId("recycle-contents")).toHaveTextContent(
-      "2 originals waiting, using 8.0 GB",
+      "2 files waiting, using 8.0 GB",
     );
     const save = screen.getByRole("button", { name: "Save" });
     expect(save).toBeDisabled();

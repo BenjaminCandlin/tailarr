@@ -22,6 +22,7 @@ from sqlmodel import Session, delete, select
 
 from ..core.db import Setting
 from ..core.paths import is_inside
+from ..jobs.models import CopyRecord
 from .artwork import find_backdrop, find_poster
 from .models import Film, FilmFile
 from .naming import TEMP_PREFIX, is_tailarr_copy, is_video, parse_film_folder, sort_key
@@ -47,6 +48,8 @@ class FoundFile:
     size: int
     mtime: float
     links: int
+    # The file it was made from, when Tailarr's records say this file is one of its copies.
+    copy_of: str | None = None
 
     @property
     def is_mkv(self) -> bool:
@@ -54,7 +57,14 @@ class FoundFile:
 
     @property
     def is_copy(self) -> bool:
-        return is_tailarr_copy(self.name)
+        # By name, or by Tailarr's records: Radarr/Sonarr may rename a copy and drop the
+        # "- HDR10" ending, and it must still never be taken for an original.
+        return self.copy_of is not None or is_tailarr_copy(self.name)
+
+
+def recorded_copies(session: Session) -> dict[str, str]:
+    """Every copy Tailarr has made: copy path -> the path it was made from."""
+    return {record.path: record.source_path for record in session.exec(select(CopyRecord))}
 
 
 @dataclass
@@ -80,7 +90,9 @@ def _stat_file(entry: os.DirEntry[str]) -> os.stat_result | None:
     return None
 
 
-def _scan_folder(folder: Path, root: Path) -> FoundFilm | None:
+def _scan_folder(
+    folder: Path, root: Path, copies: dict[str, str] | None = None
+) -> FoundFilm | None:
     try:
         entries = list(os.scandir(folder))
     except OSError as error:
@@ -96,7 +108,16 @@ def _scan_folder(folder: Path, root: Path) -> FoundFilm | None:
         stat = _stat_file(entry)
         if stat is None:
             continue
-        files.append(FoundFile(entry.name, entry.path, stat.st_size, stat.st_mtime, stat.st_nlink))
+        files.append(
+            FoundFile(
+                entry.name,
+                entry.path,
+                stat.st_size,
+                stat.st_mtime,
+                stat.st_nlink,
+                copy_of=(copies or {}).get(entry.path),
+            )
+        )
     if not files:
         return None
     files.sort(key=lambda f: (f.is_copy, f.name.casefold()))
@@ -118,7 +139,7 @@ def _scan_folder(folder: Path, root: Path) -> FoundFilm | None:
     return film
 
 
-def find_films(root: Path) -> list[FoundFilm]:
+def find_films(root: Path, copies: dict[str, str] | None = None) -> list[FoundFilm]:
     """List every film folder in the Films folder."""
     if not root.is_dir():
         raise LibraryFolderMissingError(
@@ -137,7 +158,7 @@ def find_films(root: Path) -> list[FoundFilm]:
         folder = Path(entry.path)
         if not is_inside(folder, root):
             continue
-        found = _scan_folder(folder, root)
+        found = _scan_folder(folder, root, copies)
         if found:
             films.append(found)
     return films
@@ -204,7 +225,11 @@ def rescan_film_folder(session: Session, folder: str, root: Path) -> Film | None
     Much quicker than a full scan. Returns None if the folder no longer holds a film.
     """
     existing = session.exec(select(Film).where(Film.folder == folder)).first()
-    found = _scan_folder(Path(folder), root) if is_inside(folder, root) else None
+    found = (
+        _scan_folder(Path(folder), root, recorded_copies(session))
+        if is_inside(folder, root)
+        else None
+    )
     if found is None:
         if existing is not None:
             session.exec(delete(FilmFile).where(FilmFile.film_id == existing.id))  # type: ignore[arg-type]
@@ -356,4 +381,4 @@ class FilmScanner(LibraryScanner):
     missing_message = "Tailarr couldn't read your Films folder ({error})."
 
     def find_and_save(self, session: Session, root: Path) -> int:
-        return save_films(session, find_films(root))
+        return save_films(session, find_films(root, recorded_copies(session)))

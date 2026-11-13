@@ -167,6 +167,85 @@ test("remove a track into a copy, then replace the original with it", async ({
   expect(recycle.file_count).toBe(1);
 });
 
+test("put the replaced original back from the recycle folder", async ({
+  page,
+}) => {
+  const name = "Bright Lights (2019) Bluray-2160p.mkv";
+  const screens = [
+    { size: "desktop", viewport: { width: 1440, height: 900 } },
+    { size: "phone", viewport: { width: 390, height: 844 } },
+  ];
+  // The summary only (cancelled), in every size and theme, for the screenshots.
+  for (const { size, viewport } of screens) {
+    await page.setViewportSize(viewport);
+    for (const theme of ["dark", "light"] as const) {
+      await page.addInitScript(
+        (t) => localStorage.setItem("tailarr-theme", t),
+        theme,
+      );
+      await page.goto("/settings");
+      const list = page.getByTestId("recycled-files");
+      await expect(list).toContainText(name);
+      await expect(list).toContainText("deleted in 30 days");
+      await list.scrollIntoViewIfNeeded();
+      await page.screenshot({
+        path: `screenshots/${size}-${theme}-recycle-restore-list.png`,
+      });
+      await list.getByRole("button", { name: /Restore/ }).click();
+      const dialog = page.getByRole("dialog", { name: "Put this file back?" });
+      // The copy that replaced it has the same name now: swapping must be chosen.
+      await expect(dialog.getByTestId("restore-clash")).toBeVisible();
+      await expect(
+        dialog.getByRole("button", { name: "Swap them" }),
+      ).toBeDisabled();
+      await page.waitForTimeout(300); // let the sheet finish sliding in
+      const overflow = await page.evaluate(
+        () =>
+          document.documentElement.scrollWidth -
+          document.documentElement.clientWidth,
+      );
+      expect(overflow, "page should not scroll sideways").toBeLessThanOrEqual(
+        0,
+      );
+      if (isPhone(page)) {
+        for (const button of await dialog.getByRole("button").all())
+          expect((await button.boundingBox())!.height).toBeGreaterThanOrEqual(
+            44,
+          );
+      }
+      await page.screenshot({
+        path: `screenshots/${size}-${theme}-recycle-restore-summary.png`,
+      });
+      await dialog.getByRole("button", { name: "Cancel" }).click();
+      await expect(dialog).toHaveCount(0);
+    }
+  }
+
+  // Now really put it back: the original returns, the copy waits in the recycle folder.
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/settings");
+  const list = page.getByTestId("recycled-files");
+  await list.getByRole("button", { name: /Restore/ }).click();
+  const dialog = page.getByRole("dialog", { name: "Put this file back?" });
+  await dialog.getByRole("checkbox", { name: /Swap them/ }).click();
+  await dialog.getByRole("button", { name: "Swap them" }).click();
+  await expect(page.getByText("File put back", { exact: true })).toBeVisible({
+    timeout: 30_000,
+  });
+  await page.getByText("Close", { exact: true }).click();
+  await expect(list).toContainText(name); // now it's the copy that waits there
+
+  // The film has its original back, with both audio tracks.
+  await openFilm(page, "Bright Lights");
+  await expect(page.getByRole("region", { name: /^Audio/ })).toContainText(
+    "Audio (2)",
+  );
+  const activity = await (await page.request.get("/api/activity")).json();
+  expect(activity.some((a: { kind: string }) => a.kind === "restored")).toBe(
+    true,
+  );
+});
+
 test("make a copy without Dolby Vision of a UHD Blu-ray style film", async ({
   page,
 }) => {
@@ -345,23 +424,33 @@ test("a Sonarr import starts an enabled rule by itself", async ({ page }) => {
   const season = `${root}/Test Show/Season 01`;
   const added = `${season}/Test Show - S01E05 - Arrived By Itself.mkv`;
   fs.copyFileSync(`${season}/Test Show - S01E03 - Many Voices.mkv`, added);
-  const path = (await (await page.request.get("/api/settings/connections")).json()).webhook_paths
-    .sonarr;
+  const path = (
+    await (await page.request.get("/api/settings/connections")).json()
+  ).webhook_paths.sonarr;
   const reply = await page.request.post(path, {
     data: { eventType: "Download", episodeFile: { path: added } },
   });
   expect((await reply.json()).message).toContain("imported a new file");
 
   await page.goto("/queue");
-  const group = page.getByRole("listitem", { name: /Group: Rule “Only English subtitles”: Sonarr import/ });
-  await expect(group.getByTestId("group-counts")).toHaveText("1 of 1 done", { timeout: 60_000 });
+  const group = page.getByRole("listitem", {
+    name: /Group: Rule “Only English subtitles”: Sonarr import/,
+  });
+  await expect(group.getByTestId("group-counts")).toHaveText("1 of 1 done", {
+    timeout: 60_000,
+  });
   await page.goto("/activity?show=rule");
   await expect(page.getByText(/Arrived By Itself/).first()).toBeVisible();
-  await page.screenshot({ path: "screenshots/changes-activity-rule.png", fullPage: true });
+  await page.screenshot({
+    path: "screenshots/changes-activity-rule.png",
+    fullPage: true,
+  });
   expect(fs.existsSync(added.replace(".mkv", " - Tailarr.mkv"))).toBe(true);
 });
 
-test("switch the login on, log out, log back in, and switch it off", async ({ page }) => {
+test("switch the login on, log out, log back in, and switch it off", async ({
+  page,
+}) => {
   await page.goto("/settings");
   await page.getByRole("switch", { name: /Ask for a username/ }).click();
   await page.locator("#login-name").fill("ben");
@@ -374,20 +463,28 @@ test("switch the login on, log out, log back in, and switch it off", async ({ pa
   const stranger = await page.context().browser()!.newContext();
   const other = await stranger.newPage();
   await other.goto(page.url().replace(/\/settings.*/, "/films"));
-  await expect(other.getByRole("heading", { name: "Log in to Tailarr" })).toBeVisible();
+  await expect(
+    other.getByRole("heading", { name: "Log in to Tailarr" }),
+  ).toBeVisible();
   await other.screenshot({ path: "screenshots/changes-login.png" });
   expect((await other.request.get("/api/films")).status()).toBe(401);
   await other.getByLabel("Username").fill("ben");
   await other.getByLabel("Password").fill("wrong password");
   await other.getByRole("button", { name: "Log in" }).click();
-  await expect(other.getByRole("alert")).toHaveText("Wrong username or password.");
+  await expect(other.getByRole("alert")).toHaveText(
+    "Wrong username or password.",
+  );
   await other.getByLabel("Password").fill("correct horse");
   await other.getByRole("button", { name: "Log in" }).click();
-  await expect(other.getByRole("heading", { level: 1, name: "Films" })).toBeVisible();
+  await expect(
+    other.getByRole("heading", { level: 1, name: "Films" }),
+  ).toBeVisible();
   await stranger.close();
 
   await page.getByRole("button", { name: "Log out" }).click();
-  await expect(page.getByRole("heading", { name: "Log in to Tailarr" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Log in to Tailarr" }),
+  ).toBeVisible();
   await page.getByLabel("Username").fill("ben");
   await page.getByLabel("Password").fill("correct horse");
   await page.getByRole("button", { name: "Log in" }).click();

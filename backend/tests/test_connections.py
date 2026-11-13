@@ -13,10 +13,12 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from tailarr.core.config import AppConfig
 from tailarr.jobs.models import CopyRecord, RecycledFile
+from tailarr.library.models import Episode, EpisodeFile, Film, FilmFile
+from tailarr.library.scanner import rescan_film_folder
 from tailarr.main import create_app
 from tests.conftest import page_client
 
@@ -516,3 +518,103 @@ def test_repeated_test_messages_are_logged_once(app_client: TestClient) -> None:
     messages = [a["message"] for a in app_client.get("/api/activity").json()]
     assert messages.count("Radarr sent a test message. The connection works.") == 1
     assert messages.count("Sonarr sent a test message. The connection works.") == 1
+
+
+# -- copies renamed by Radarr/Sonarr (recognised by Tailarr's records, not only the name) ------
+
+
+def _film_files(client: TestClient, folder: Path) -> tuple[str | None, dict[str, bool]]:
+    with Session(client.app.state.engine) as session:  # type: ignore[attr-defined]
+        film = session.exec(select(Film).where(Film.folder == str(folder))).one()
+        files = session.exec(select(FilmFile).where(FilmFile.film_id == film.id)).all()
+        return film.main_file, {f.name: f.is_copy for f in files}
+
+
+def test_a_renamed_copy_stays_a_copy_after_a_rescan(app_client: TestClient, library) -> None:
+    movies, _ = library
+    folder = movies / COLOUR
+    original, copy = folder / COLOUR_FILE, folder / COLOUR_COPY
+    # Radarr's "Rename Files" dropped the "- HDR10" ending (and the copy is the bigger file,
+    # so going by name and size alone it would look like the main film).
+    renamed = folder / "Colour Test (2023) Remux-2160p.mkv"
+    copy.rename(renamed)
+    with renamed.open("ab") as handle:
+        handle.write(b"\0" * (original.stat().st_size + 1024))
+    _record_copy(app_client, original, renamed)
+
+    app_client.app.state.film_scanner.run()  # type: ignore[attr-defined]
+    main, files = _film_files(app_client, folder)
+    assert main == COLOUR_FILE
+    assert files == {COLOUR_FILE: False, renamed.name: True}
+
+    # A quick re-scan of just this folder (after a job or a webhook) agrees.
+    with Session(app_client.app.state.engine) as session:  # type: ignore[attr-defined]
+        film = rescan_film_folder(session, str(folder), movies)
+        assert film is not None and film.main_file == COLOUR_FILE
+
+    # Automatic rules never treat it as a new film.
+    assert app_client.app.state.auto_runner.add(str(renamed), "test") is False  # type: ignore[attr-defined]
+
+
+def test_rename_webhook_follows_a_renamed_copy(app_client: TestClient, library) -> None:
+    movies, _ = library
+    folder = movies / COLOUR
+    original, copy = folder / COLOUR_FILE, folder / COLOUR_COPY
+    _record_copy(app_client, original, copy)
+    # A copy made from the copy follows too.
+    second = folder / "Colour Test (2023) WEBDL-2160p DV HDR10 - HDR10 - Tailarr.mkv"
+    shutil.copy(copy, second)
+    _record_copy(app_client, copy, second, kind="remove_tracks")
+    # Radarr renames both of its files in one go; the copy loses its "- HDR10" ending.
+    new_original = folder / "Colour Test (2023) {tmdb-1} WEBDL-2160p.mkv"
+    new_copy = folder / "Colour Test (2023) {tmdb-1} WEBDL-2160p HDR10.mkv"
+    original.rename(new_original)
+    copy.rename(new_copy)
+    result = _hook(
+        app_client,
+        "radarr",
+        {
+            "eventType": "Rename",
+            "renamedMovieFiles": [
+                {
+                    "previousPath": f"/movies/{COLOUR}/{COLOUR_FILE}",
+                    "path": f"/movies/{COLOUR}/{new_original.name}",
+                },
+                {
+                    "previousPath": f"/movies/{COLOUR}/{COLOUR_COPY}",
+                    "path": f"/movies/{COLOUR}/{new_copy.name}",
+                },
+            ],
+        },
+    ).json()
+    assert "1 Tailarr copy renamed by Radarr itself" in result["message"]
+    with Session(app_client.app.state.engine) as session:  # type: ignore[attr-defined]
+        records = {r.path: r.source_path for r in session.exec(select(CopyRecord))}
+    assert records == {str(new_copy): str(new_original), str(second): str(new_copy)}
+    main, files = _film_files(app_client, folder)
+    assert main == new_original.name
+    assert files == {new_original.name: False, new_copy.name: True, second.name: True}
+    assert any(
+        a["kind"] == "copy-renamed" and "still knows it's a copy" in a["message"]
+        for a in app_client.get("/api/activity").json()
+    )
+
+
+def test_a_renamed_episode_copy_stays_with_its_episode(app_client: TestClient, library) -> None:
+    _, tv = library
+    season = tv / "Another Show (2022)" / "Season 01"
+    original = season / "Another Show (2022) - S01E01 - Start.mkv"
+    copy = season / "Another Show (2022) - S01E01 - Start - HDR10.mkv"
+    renamed = season / "Another Show (2022) - S01E01 - Start WEBDL-2160p.mkv"
+    copy.rename(renamed)
+    _record_copy(app_client, original, renamed)
+    app_client.app.state.tv_scanner.run()  # type: ignore[attr-defined]
+    with Session(app_client.app.state.engine) as session:  # type: ignore[attr-defined]
+        rows = session.exec(
+            select(EpisodeFile, Episode)
+            .where(EpisodeFile.episode_id == Episode.id)
+            .where(Episode.season == 1, Episode.episode == 1)
+            .where(col(Episode.folder) == str(season))
+        ).all()
+    assert {f.name: f.is_copy for f, _ in rows} == {original.name: False, renamed.name: True}
+    assert {e.main_file for _, e in rows} == {original.name}

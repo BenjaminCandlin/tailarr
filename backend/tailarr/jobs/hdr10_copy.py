@@ -35,10 +35,9 @@ from sqlmodel import Session
 
 from ..core.disk import SAFETY_MARGIN, format_size, free_space
 from ..core.permissions import apply_umask
-from ..library.naming import is_tailarr_copy
 from ..media.probe import MediaDetails, ReadError, Track, describe, read_file
 from .engine import JobContext, JobFailed, JobType
-from .models import CopyRecord
+from .models import CopyRecord, is_copy
 from .remove_tracks import CopyPlan, CopyRefusedError, Wanted, place_new_file, plan_copy
 from .track_settings import TrackChange, TracksChangedError, check_file, track_label
 
@@ -299,12 +298,12 @@ def make_job_type(
         except (Hdr10Refused, TracksChangedError, CopyRefusedError) as exc:
             raise JobFailed(str(exc)) from exc
         # Updating one of Tailarr's own copies in place (batch "also change copies").
-        update_copy = bool(ctx.params.get("update_copy")) and is_tailarr_copy(Path(source).name)
+        update_copy = bool(ctx.params.get("update_copy")) and is_copy(engine, source)
         final = Path(source) if update_copy else film_folder / output_name(Path(source).name)
         if update_copy:
             overwrite = True
         elif final.exists():
-            if not is_tailarr_copy(final.name):
+            if not is_copy(engine, final):
                 raise JobFailed(
                     f"A file called “{final.name}” is already there and it isn't a "
                     "copy made by Tailarr, so Tailarr won't replace it."

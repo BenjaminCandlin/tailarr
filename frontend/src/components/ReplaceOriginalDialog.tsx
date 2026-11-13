@@ -92,8 +92,9 @@ function Summary({
       <p>
         The original isn't deleted straight away: it moves to a hidden recycle folder inside the
         film's folder and is deleted after{" "}
-        <span className="font-medium">{preview.keep_days} days</span>. Until then you can get it
-        back by moving it out of <span className="break-all">{preview.recycle_folder}</span>.
+        <span className="font-medium">{preview.keep_days} days</span> (
+        <span className="break-all">{preview.recycle_folder}</span>). Until then you can put it back
+        with <span className="font-medium">Restore</span> in Settings → Recycle folder.
       </p>
       <p className="text-muted-foreground" data-testid="replace-space">
         {spaceText(preview)}
