@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, ArrowLeft, Eye, Plus, Trash2 } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Eye, EyeOff, Plus, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 
@@ -293,7 +293,7 @@ function RuleForm({ initial, ruleId }: { initial: RuleInput; ruleId: number | nu
             value={choices.kind}
             onChange={(kind) => set({ kind })}
             name="rule-kind"
-            wording="files"
+            noun={{ one: "file", many: "files" }}
           />
           <div className="rounded-xl border p-3">
             <ActionOptions choices={choices} set={set} />
@@ -358,11 +358,16 @@ function RuleForm({ initial, ruleId }: { initial: RuleInput; ruleId: number | nu
             <Button
               type="button"
               variant="secondary"
-              onClick={() => preview.mutate()}
+              onClick={() => (preview.data ? preview.reset() : preview.mutate())}
               disabled={Boolean(missingChoice(choices)) || preview.isPending}
+              aria-expanded={Boolean(preview.data)}
             >
-              <Eye aria-hidden />
-              {preview.isPending ? "Checking your library…" : "Preview this rule"}
+              {preview.data ? <EyeOff aria-hidden /> : <Eye aria-hidden />}
+              {preview.isPending
+                ? "Checking your library…"
+                : preview.data
+                  ? "Hide the preview"
+                  : "Preview this rule"}
             </Button>
           </div>
           {preview.isError && (
@@ -374,6 +379,12 @@ function RuleForm({ initial, ruleId }: { initial: RuleInput; ruleId: number | nu
             <>
               <p className="text-sm">{preview.data.sentence}</p>
               <RulePreviewList preview={preview.data} />
+              <div>
+                <Button type="button" variant="ghost" onClick={() => preview.reset()}>
+                  <EyeOff aria-hidden />
+                  Hide the preview
+                </Button>
+              </div>
             </>
           )}
         </CardContent>

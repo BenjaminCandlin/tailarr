@@ -1,9 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
+  Check,
   Clapperboard,
   LayoutGrid,
   List,
+  ListChecks,
   RefreshCw,
   Search,
   SearchX,
@@ -12,6 +14,7 @@ import {
 import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 
+import { BatchDialog } from "@/components/BatchDialog";
 import { EmptyState } from "@/components/EmptyState";
 import { GettingStarted } from "@/components/GettingStarted";
 import { MediaBadges } from "@/components/MediaBadges";
@@ -104,7 +107,63 @@ function NotMkv({ film, overlay = false }: { film: Film; overlay?: boolean }) {
   );
 }
 
-function FilmGrid({ films }: { films: Film[] }) {
+type Selection = { selected: Set<number>; toggle: (id: number) => void } | null;
+
+/**
+ * A film card's outer element: a link to the film normally, or (while choosing films)
+ * a tick-box button that selects it.
+ */
+function CardLink({
+  film,
+  selection,
+  className,
+  children,
+}: {
+  film: Film;
+  selection: Selection;
+  className: string;
+  children: React.ReactNode;
+}) {
+  if (!selection) {
+    return (
+      <Link to={`/films/${film.id}`} className={className}>
+        {children}
+      </Link>
+    );
+  }
+  const checked = selection.selected.has(film.id);
+  return (
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={checked}
+      aria-label={`Select ${film.title}${film.year ? ` (${film.year})` : ""}`}
+      onClick={() => selection.toggle(film.id)}
+      className={cn(className, "w-full cursor-pointer text-left")}
+    >
+      {children}
+    </button>
+  );
+}
+
+function Tickbox({ checked, className }: { checked: boolean; className?: string }) {
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        "flex size-6 items-center justify-center rounded-md border-2 shadow-sm",
+        checked
+          ? "border-primary bg-primary text-primary-foreground"
+          : "border-white/80 bg-black/40",
+        className,
+      )}
+    >
+      {checked && <Check className="size-4" strokeWidth={3} />}
+    </span>
+  );
+}
+
+function FilmGrid({ films, selection }: { films: Film[]; selection: Selection }) {
   return (
     <ul
       aria-label="Films"
@@ -112,13 +171,22 @@ function FilmGrid({ films }: { films: Film[] }) {
     >
       {films.map((film) => (
         <li key={film.id}>
-          <Link to={`/films/${film.id}`} className="group block rounded-lg">
+          <CardLink film={film} selection={selection} className="group block rounded-lg">
             <div className="relative">
               <Poster
                 src={film.poster_url}
                 title={film.title}
-                className="transition group-hover:border-primary group-hover:shadow-lg"
+                className={cn(
+                  "transition group-hover:border-primary group-hover:shadow-lg",
+                  selection?.selected.has(film.id) && "border-primary ring-2 ring-primary",
+                )}
               />
+              {selection && (
+                <Tickbox
+                  checked={selection.selected.has(film.id)}
+                  className="absolute bottom-2 left-2"
+                />
+              )}
               <div className="absolute top-2 right-2 left-2 flex flex-wrap gap-1">
                 <NotMkv film={film} overlay />
                 <MediaBadges media={film.media} overlay />
@@ -128,22 +196,32 @@ function FilmGrid({ films }: { films: Film[] }) {
               {film.title}
             </p>
             <p className="mt-0.5 text-xs text-muted-foreground">{filmMeta(film)}</p>
-          </Link>
+          </CardLink>
         </li>
       ))}
     </ul>
   );
 }
 
-function FilmRows({ films }: { films: Film[] }) {
+function FilmRows({ films, selection }: { films: Film[]; selection: Selection }) {
   return (
     <ul aria-label="Films" className="divide-y overflow-hidden rounded-lg border bg-card">
       {films.map((film) => (
         <li key={film.id}>
-          <Link
-            to={`/films/${film.id}`}
-            className="flex min-h-16 items-center gap-3 px-3 py-2 hover:bg-muted"
+          <CardLink
+            film={film}
+            selection={selection}
+            className={cn(
+              "flex min-h-16 items-center gap-3 px-3 py-2 hover:bg-muted",
+              selection?.selected.has(film.id) && "bg-accent/40",
+            )}
           >
+            {selection && (
+              <Tickbox
+                checked={selection.selected.has(film.id)}
+                className="shrink-0 border-input"
+              />
+            )}
             <Poster src={film.poster_url} title={film.title} compact className="w-10 shrink-0" />
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium">{film.title}</p>
@@ -163,7 +241,7 @@ function FilmRows({ films }: { films: Film[] }) {
             <span className="w-20 shrink-0 text-right text-sm text-muted-foreground tabular-nums">
               {formatSize(film.size)}
             </span>
-          </Link>
+          </CardLink>
         </li>
       ))}
     </ul>
@@ -310,6 +388,24 @@ function FilmsContent({ data }: { data: FilmList }) {
     );
   }, [data.films, query, sort, filter]);
   const unread = data.films.filter((f) => !f.media.read).length;
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<Set<number>>(() => new Set());
+  const [batchOpen, setBatchOpen] = useState(false);
+  const selection: Selection = selecting
+    ? {
+        selected,
+        toggle: (id) =>
+          setSelected((current) => {
+            const next = new Set(current);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+          }),
+      }
+    : null;
+  const chosen = data.films.filter((f) => selected.has(f.id));
+  const shownIds = new Set(shown.map((f) => f.id));
+  const hiddenSelected = chosen.filter((f) => !shownIds.has(f.id)).length;
 
   const { scan } = data;
 
@@ -377,6 +473,14 @@ function FilmsContent({ data }: { data: FilmList }) {
         view={view}
         onView={setView}
       />
+      {!selecting && (
+        <div className="mb-4">
+          <Button variant="secondary" onClick={() => setSelecting(true)}>
+            <ListChecks aria-hidden />
+            Choose films to change…
+          </Button>
+        </div>
+      )}
       {(query || filter.key !== "all") && shown.length > 0 && (
         <p className="mb-3 text-sm text-muted-foreground" role="status">
           {plural(shown.length, "film")} found
@@ -414,9 +518,64 @@ function FilmsContent({ data }: { data: FilmList }) {
           </div>
         </EmptyState>
       ) : view === "grid" ? (
-        <FilmGrid films={shown} />
+        <FilmGrid films={shown} selection={selection} />
       ) : (
-        <FilmRows films={shown} />
+        <FilmRows films={shown} selection={selection} />
+      )}
+      {selecting && (
+        <div
+          className="sticky bottom-20 z-10 mt-4 flex flex-col gap-3 rounded-xl border border-primary/40 bg-card/95 p-3 shadow-lg backdrop-blur md:bottom-4 md:flex-row md:items-center"
+          data-testid="selection-bar"
+        >
+          <p className="flex-1 text-sm font-medium" role="status">
+            {plural(selected.size, "film")} selected
+            {hiddenSelected > 0 && (
+              <span className="font-normal text-muted-foreground">
+                {" "}
+                ({hiddenSelected} not shown by the current search or filter)
+              </span>
+            )}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSelected(new Set([...selected, ...shown.map((f) => f.id)]))}
+            >
+              Select all{shown.length < data.films.length ? ` shown (${shown.length})` : ""}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSelected(new Set())}
+              disabled={selected.size === 0}
+            >
+              Deselect all
+            </Button>
+            <Button size="sm" onClick={() => setBatchOpen(true)} disabled={selected.size === 0}>
+              Change {plural(selected.size, "film")}…
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                setSelecting(false);
+                setSelected(new Set());
+              }}
+            >
+              Done
+            </Button>
+          </div>
+        </div>
+      )}
+      {batchOpen && (
+        <BatchDialog
+          target={{ kind: "films", filmIds: [...selected] }}
+          scopeLabel={chosen.length === 1 ? chosen[0].title : `${plural(chosen.length, "film")}`}
+          hasCopies={chosen.some((f) => f.file_count > 1)}
+          open
+          onOpenChange={(open) => !open && setBatchOpen(false)}
+        />
       )}
     </>
   );

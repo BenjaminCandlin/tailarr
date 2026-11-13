@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
@@ -176,5 +176,56 @@ describe("formatting", () => {
     expect(timeAgo("2026-11-09T11:59:00Z", now)).toBe("1 minute ago");
     expect(timeAgo("2026-11-09T09:00:00Z", now)).toBe("3 hours ago");
     expect(timeAgo("2026-11-07T12:00:00Z", now)).toBe("2 days ago");
+  });
+});
+
+describe("changing many films", () => {
+  it("chooses films with tick boxes, then previews the change", async () => {
+    const sent: { film_ids: number[] }[] = [];
+    mockBackend((url, init) => {
+      if (url.endsWith("/api/films/batch/preview")) {
+        sent.push(JSON.parse(String(init?.body)));
+        return json({
+          title: "x",
+          action: "Make a copy without Dolby Vision (HDR10 copy)",
+          scope: "2 films",
+          changes_originals: false,
+          files: [],
+          will_run: 0,
+          skipped: 0,
+          hardlinked_skipped: 0,
+          flagged: 0,
+          copies: 0,
+          space: [],
+          enough_space: true,
+        });
+      }
+      return undefined;
+    });
+    renderApp("/films");
+    await userEvent.click(await screen.findByRole("button", { name: /Choose films to change/ }));
+    const boxes = screen.getAllByRole("checkbox", { name: /^Select / });
+    expect(boxes.length).toBeGreaterThan(1);
+    // While choosing, cards don't open the film.
+    expect(within(screen.getByRole("list", { name: "Films" })).queryAllByRole("link")).toHaveLength(
+      0,
+    );
+    await userEvent.click(boxes[0]);
+    expect(boxes[0]).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByTestId("selection-bar")).toHaveTextContent("1 film selected");
+    await userEvent.click(screen.getByRole("button", { name: /^Select all/ }));
+    expect(screen.getByTestId("selection-bar")).toHaveTextContent(`${boxes.length} films selected`);
+    await userEvent.click(screen.getByRole("button", { name: "Deselect all" }));
+    expect(screen.getByRole("button", { name: /^Change 0 films/ })).toBeDisabled();
+    await userEvent.click(boxes[0]);
+    await userEvent.click(boxes[1]);
+    await userEvent.click(screen.getByRole("button", { name: "Change 2 films…" }));
+    const dialog = await screen.findByRole("dialog", { name: "Change 2 films" });
+    await userEvent.click(within(dialog).getByRole("button", { name: "Show what will happen" }));
+    await waitFor(() => expect(sent).toHaveLength(1));
+    expect(sent[0].film_ids).toHaveLength(2);
+    await userEvent.keyboard("{Escape}");
+    await userEvent.click(screen.getByRole("button", { name: "Done" }));
+    expect(screen.queryByTestId("selection-bar")).toBeNull();
   });
 });

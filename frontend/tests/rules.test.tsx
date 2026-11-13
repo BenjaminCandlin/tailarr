@@ -93,6 +93,10 @@ describe("rules", () => {
       "/films/6",
     );
     expect(previews[0].conditions).toEqual([{ type: "has_dolby_vision", languages: [] }]);
+    // Pressing the button again hides the long list.
+    await userEvent.click(screen.getAllByRole("button", { name: "Hide the preview" })[0]);
+    expect(screen.queryByTestId("rule-preview-counts")).toBeNull();
+    expect(screen.getByRole("button", { name: "Preview this rule" })).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Save the rule" }));
     await waitFor(() => expect(saved).not.toBeNull());
     expect(saved!.enabled).toBe(false);

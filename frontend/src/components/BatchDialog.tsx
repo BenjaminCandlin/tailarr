@@ -25,14 +25,20 @@ import { api, type BatchPreview, type BatchRequest, type BatchStarted } from "@/
 import { formatSize, plural } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
+export type Noun = { one: string; many: string };
+
+const EPISODES: Noun = { one: "episode", many: "episodes" };
+
 function PreviewSummary({
   preview,
   allowHardlinked,
   onAllowHardlinked,
+  noun,
 }: {
   preview: BatchPreview;
   allowHardlinked: boolean;
   onAllowHardlinked: (value: boolean) => void;
+  noun: Noun;
 }) {
   const running = preview.files.filter((f) => f.will_run);
   const skipped = preview.files.filter((f) => !f.will_run);
@@ -44,7 +50,7 @@ function PreviewSummary({
         <p className="text-muted-foreground">{preview.scope}</p>
       </div>
       <p data-testid="batch-counts">
-        <span className="font-medium">{plural(preview.will_run, "episode")}</span> will{" "}
+        <span className="font-medium">{plural(preview.will_run, noun.one, noun.many)}</span> will{" "}
         {preview.changes_originals ? "be changed" : "get a copy"}
         {skipped.length > 0 && <>, {skipped.length} skipped</>}.
         {preview.flagged > 0 && (
@@ -56,8 +62,8 @@ function PreviewSummary({
       </p>
       {preview.copies > 0 && !preview.files.some((f) => f.is_copy) && (
         <p className="text-muted-foreground">
-          These episodes also have {plural(preview.copies, "copy", "copies")} made by Tailarr, which
-          are left as they are. Go back and tick “Also change the copies” to change them too.
+          These {noun.many} also have {plural(preview.copies, "copy", "copies")} made by Tailarr,
+          which are left as they are. Go back and tick “Also change the copies” to change them too.
         </p>
       )}
       {preview.changes_originals && running.length > 0 && (
@@ -74,13 +80,13 @@ function PreviewSummary({
           <div className="flex gap-2">
             <Link2 className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden />
             <p>
-              Some episodes are also in your downloads (still seeding). Changing them also changes
-              the seeding copy, which can break the torrent, so they're skipped unless you tick
-              this.
+              Some {noun.many} are also in your downloads (still seeding). Changing them also
+              changes the seeding copy, which can break the torrent, so they're skipped unless you
+              tick this.
             </p>
           </div>
           <Tick checked={allowHardlinked} onChange={onAllowHardlinked}>
-            I understand: change seeding episodes too
+            I understand: change seeding {noun.many} too
           </Tick>
         </div>
       )}
@@ -89,9 +95,12 @@ function PreviewSummary({
           <p className="mb-2 font-medium">
             {preview.changes_originals ? "Will be changed" : "Copies to make"}
           </p>
-          <ul className="flex flex-col gap-1.5" aria-label="Episodes that will change">
+          <ul
+            className="flex flex-col gap-1.5"
+            aria-label={`${noun.many[0].toUpperCase()}${noun.many.slice(1)} that will change`}
+          >
             {running.map((file) => (
-              <li key={`${file.episode_id}-${file.file}`} className="rounded-lg border px-3 py-2">
+              <li key={`${file.item_id}-${file.file}`} className="rounded-lg border px-3 py-2">
                 <p className="font-medium [overflow-wrap:anywhere]">{file.label}</p>
                 {file.new_file && (
                   <p className="text-xs text-muted-foreground [overflow-wrap:anywhere]">
@@ -128,9 +137,9 @@ function PreviewSummary({
           <summary className="min-h-9 cursor-pointer py-1 font-medium">
             Skipped ({skipped.length})
           </summary>
-          <ul className="mt-1 flex flex-col gap-2" aria-label="Skipped episodes">
+          <ul className="mt-1 flex flex-col gap-2" aria-label={`Skipped ${noun.many}`}>
             {skipped.map((file) => (
-              <li key={`${file.episode_id}-${file.file}`} className="flex gap-2">
+              <li key={`${file.item_id}-${file.file}`} className="flex gap-2">
                 <MinusCircle className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
                 <span className="[overflow-wrap:anywhere]">
                   <span className="font-medium">{file.label}</span>
@@ -154,7 +163,7 @@ function PreviewSummary({
             <p key={space.label} className={cn(!space.enough && "font-medium text-destructive")}>
               Space needed on {space.label}: {formatSize(space.needed)} ({formatSize(space.free)}{" "}
               free)
-              {!space.enough && ". Not enough: free up some space or choose one season at a time."}
+              {!space.enough && ". Not enough: free up some space or choose fewer at a time."}
             </p>
           ))}
           <p className="text-xs text-muted-foreground">
@@ -168,47 +177,60 @@ function PreviewSummary({
 
 type Step = "choose" | "preview" | "started";
 
-/**
- * Apply one action to every episode of a season or a whole show. Track numbers differ
- * from episode to episode, so choices are made by language ("keep only English
- * subtitles"), and the summary shows what that means for each episode before anything
- * starts. One job per episode, shown as a group in the queue.
- */
 export { actionOf, missingChoice };
 
+/** What to change: a TV season or show, or a selection of films. */
+export type BatchTarget =
+  { kind: "show"; showId: number; season: number | null } | { kind: "films"; filmIds: number[] };
+
+/**
+ * Apply one action to many films or episodes (a season, a whole show, or chosen films).
+ * Track numbers differ from file to file, so choices are made by language ("keep only
+ * English subtitles"), and the summary shows what that means for each file before
+ * anything starts. One job per file, shown as a group in the queue.
+ */
 export function BatchDialog({
-  showId,
-  season,
+  target,
   scopeLabel,
+  hasCopies = false,
   open,
   onOpenChange,
 }: {
-  showId: number;
-  /** null: the whole show. */
-  season: number | null;
+  target: BatchTarget;
   scopeLabel: string;
+  /** Some of these items have copies Tailarr made: offer (and pre-tick) changing them. */
+  hasCopies?: boolean;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const noun: Noun = target.kind === "films" ? { one: "film", many: "films" } : EPISODES;
   const queryClient = useQueryClient();
   const [step, setStep] = useState<Step>("choose");
   const [choices, setChoices] = useState<Choices>(START);
   const [allowHardlinked, setAllowHardlinked] = useState(false);
-  const [includeCopies, setIncludeCopies] = useState(false);
+  const [includeCopies, setIncludeCopies] = useState(hasCopies);
   const [started, setStarted] = useState<BatchStarted | null>(null);
 
+  // Plain HDR10 copies don't touch copies (they're already without Dolby Vision); with
+  // track changes, or for the other actions, existing copies can be brought in line.
+  const copiesMatter = hasCopies && (choices.kind !== "hdr10_copy" || choices.hdr10Tracks);
   const request = (allow = allowHardlinked): BatchRequest => ({
-    season,
     action: actionOf(choices),
     allow_hardlinked: allow,
-    include_copies: includeCopies,
+    include_copies: copiesMatter && includeCopies,
   });
   const preview = useMutation({
-    mutationFn: (allow: boolean) => api.previewBatch(showId, request(allow)),
+    mutationFn: (allow: boolean) =>
+      target.kind === "films"
+        ? api.previewFilmsBatch(target.filmIds, request(allow))
+        : api.previewBatch(target.showId, { ...request(allow), season: target.season }),
     onSuccess: () => setStep("preview"),
   });
   const start = useMutation({
-    mutationFn: () => api.startBatch(showId, request()),
+    mutationFn: () =>
+      target.kind === "films"
+        ? api.startFilmsBatch(target.filmIds, request())
+        : api.startBatch(target.showId, { ...request(), season: target.season }),
     onSuccess: (data) => {
       setStarted(data);
       setStep("started");
@@ -233,25 +255,29 @@ export function BatchDialog({
           value={choices.kind}
           onChange={(kind) => set({ kind })}
           name="batch-kind"
+          noun={noun}
         />
         <div className="rounded-xl border p-3">
           <ActionOptions choices={choices} set={set} />
         </div>
-        <div className="rounded-xl border p-3">
-          <Tick
-            checked={includeCopies}
-            onChange={(value) => {
-              setIncludeCopies(value);
-              preview.reset();
-            }}
-          >
-            Also change the copies Tailarr made of these episodes, not just the originals
-          </Tick>
-          <p className="pl-8 text-xs text-muted-foreground">
-            For example, after making HDR10 copies: change the copies' tracks too, so both versions
-            match. Copies are updated where they are (no copy of a copy is made).
-          </p>
-        </div>
+        {copiesMatter && (
+          <div className="rounded-xl border p-3">
+            <Tick
+              checked={includeCopies}
+              onChange={(value) => {
+                setIncludeCopies(value);
+                preview.reset();
+              }}
+            >
+              Also change the copies Tailarr made of these {noun.many}, not just the originals
+            </Tick>
+            <p className="pl-8 text-xs text-muted-foreground">
+              Some of these {noun.many} have copies (for example HDR10 copies). Their tracks are
+              changed too, so both versions match. Copies are updated where they are (no copy of a
+              copy is made).
+            </p>
+          </div>
+        )}
         {missing && <p className="text-muted-foreground">{missing}</p>}
       </>
     );
@@ -264,7 +290,7 @@ export function BatchDialog({
           onClick={() => preview.mutate(allowHardlinked)}
           disabled={Boolean(missing) || preview.isPending}
         >
-          {preview.isPending ? "Checking every episode…" : "Show what will happen"}
+          {preview.isPending ? `Checking every ${noun.one}…` : "Show what will happen"}
         </Button>
       </>
     );
@@ -272,6 +298,7 @@ export function BatchDialog({
     body = (
       <PreviewSummary
         preview={data}
+        noun={noun}
         allowHardlinked={allowHardlinked}
         onAllowHardlinked={(value) => {
           setAllowHardlinked(value);
@@ -335,7 +362,7 @@ export function BatchDialog({
         title={step === "preview" ? "Check before starting" : `Change ${scopeLabel}`}
         description={
           step === "choose"
-            ? "Choose what to do to every episode. You'll see exactly what happens to each one before anything starts."
+            ? `Choose what to do to every ${noun.one}. You'll see exactly what happens to each one before anything starts.`
             : undefined
         }
         className="md:max-w-2xl"

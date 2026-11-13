@@ -369,8 +369,6 @@ export type BatchAction =
     };
 
 export type BatchRequest = {
-  /** null: the whole show. */
-  season: number | null;
   action: BatchAction;
   allow_hardlinked: boolean;
   /** Also change the copies Tailarr made of these episodes (updated where they are). */
@@ -378,7 +376,8 @@ export type BatchRequest = {
 };
 
 export type BatchFile = {
-  episode_id: number;
+  kind: "film" | "episode";
+  item_id: number;
   label: string;
   file: string;
   will_run: boolean;
@@ -673,15 +672,26 @@ export const api = {
   show: (id: number | string) => request<ShowDetail>(`/api/tv/shows/${id}`),
   episode: (id: number | string) => request<EpisodeDetail>(`/api/episodes/${id}`),
   rescanTv: () => request<ScanStatus>("/api/tv/scan", { method: "POST" }),
-  previewBatch: (showId: number, body: BatchRequest) =>
+  /** A TV season (or the whole show when `season` is null). */
+  previewBatch: (showId: number, body: BatchRequest & { season: number | null }) =>
     request<BatchPreview>(`/api/tv/shows/${showId}/batch/preview`, {
       method: "POST",
       body: JSON.stringify(body),
     }),
-  startBatch: (showId: number, body: BatchRequest) =>
+  startBatch: (showId: number, body: BatchRequest & { season: number | null }) =>
     request<BatchStarted>(`/api/tv/shows/${showId}/batch`, {
       method: "POST",
       body: JSON.stringify({ ...body, confirmed: true }),
+    }),
+  previewFilmsBatch: (filmIds: number[], body: BatchRequest) =>
+    request<BatchPreview>("/api/films/batch/preview", {
+      method: "POST",
+      body: JSON.stringify({ ...body, film_ids: filmIds }),
+    }),
+  startFilmsBatch: (filmIds: number[], body: BatchRequest) =>
+    request<BatchStarted>("/api/films/batch", {
+      method: "POST",
+      body: JSON.stringify({ ...body, film_ids: filmIds, confirmed: true }),
     }),
   languages: () => request<Language[]>("/api/languages"),
   cancelGroup: (groupId: string) =>

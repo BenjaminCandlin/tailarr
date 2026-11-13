@@ -409,12 +409,13 @@ export function ActionKindPicker({
   value,
   onChange,
   name,
-  wording = "episodes",
+  noun = { one: "episode", many: "episodes" },
 }: {
   value: Kind;
   onChange: (kind: Kind) => void;
   name: string;
-  wording?: "episodes" | "files";
+  /** What the action is applied to: episodes, films or (rules) files. */
+  noun?: { one: string; many: string };
 }) {
   return (
     <fieldset className="flex flex-col gap-2">
@@ -438,9 +439,10 @@ export function ActionKindPicker({
           <span>
             <span className="block font-medium">{title}</span>
             <span className="block text-muted-foreground">
-              {wording === "files"
-                ? text.replace(/episodes?/g, (w) => (w === "episode" ? "file" : "files"))
-                : text}
+              {text
+                .replace(/episodes/g, noun.many)
+                .replace(/episode/g, noun.one)
+                .replace(/Episodes/g, noun.many[0].toUpperCase() + noun.many.slice(1))}
             </span>
           </span>
         </label>

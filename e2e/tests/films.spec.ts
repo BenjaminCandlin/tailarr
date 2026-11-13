@@ -157,3 +157,27 @@ for (const theme of ["dark", "light"] as const) {
     });
   });
 }
+
+test("choose several films and preview a change to all of them", async ({ page }, testInfo) => {
+  await openFilms(page);
+  await page.getByRole("button", { name: /Choose films to change/ }).click();
+  const list = films(page);
+  await list.getByRole("checkbox", { name: /Select Colour Test/ }).click();
+  await list.getByRole("checkbox", { name: /Select Blu-ray Night/ }).click();
+  await expect(page.getByTestId("selection-bar")).toContainText("2 films selected");
+  await expectNoSideways(page);
+  await page.screenshot({ path: `screenshots/${testInfo.project.name}-films-choose.png` });
+  await page.getByRole("button", { name: "Change 2 films…" }).click();
+  await page
+    .getByRole("dialog", { name: "Change 2 films" })
+    .getByRole("button", { name: "Show what will happen" })
+    .click();
+  const dialog = page.getByRole("dialog", { name: "Check before starting" });
+  await expect(dialog.getByTestId("batch-counts")).toContainText("1 film will get a copy");
+  await page.screenshot({ path: `screenshots/${testInfo.project.name}-films-batch-summary.png` });
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: /^Select all/ }).click();
+  await expect(page.getByTestId("selection-bar")).toContainText("9 films selected");
+  await page.getByRole("button", { name: "Done" }).click();
+  await expect(list.getByRole("link")).toHaveCount(9);
+});
