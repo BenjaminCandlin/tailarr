@@ -16,6 +16,7 @@ const PREVIEW: Hdr10CopyPreview = {
   blu_ray_layers: false,
   result: ["HDR10"],
   kept: ["Audio 1: English – Dolby TrueHD Atmos, 7.1", "Audio 2: French – Dolby Digital, 5.1"],
+  kept_counts: { video: 0, audio: 2, subtitles: 0 },
   removed: [],
   settings: [],
   warnings: [],
@@ -119,7 +120,9 @@ describe("making a copy without Dolby Vision", () => {
     expect(steps).toHaveTextContent("together with the extra Blu-ray picture layer");
     expect(steps).toHaveTextContent("nothing is re-encoded");
     expect(steps).toHaveTextContent("show the copy as HDR10");
-    expect(steps).toHaveTextContent("2 other tracks, 12 chapters, 1 attachment");
+    expect(steps).toHaveTextContent(
+      "Everything else comes across: 2 audio tracks, no subtitle tracks, 12 chapters, 1 attachment",
+    );
     expect(within(dialog).getByTestId("hdr10-space")).toHaveTextContent(
       "Disk space on the disk with your films: needs up to 9.0 GB, 31.0 GB free.",
     );
@@ -201,7 +204,12 @@ describe("making a copy without Dolby Vision", () => {
     mockBackend((url, init) => {
       if (url.endsWith("/hdr10-copy/preview")) {
         bodies.push(JSON.parse(String(init?.body)));
-        return json({ ...PREVIEW, removed: ["Audio 2: French – Dolby Digital, 5.1"] });
+        return json({
+          ...PREVIEW,
+          kept: ["Audio 1: English – Dolby TrueHD Atmos, 7.1"],
+          kept_counts: { video: 0, audio: 1, subtitles: 0 },
+          removed: ["Audio 2: French – Dolby Digital, 5.1"],
+        });
       }
       if (url.endsWith("/hdr10-copy")) {
         bodies.push(JSON.parse(String(init?.body)));
@@ -220,6 +228,10 @@ describe("making a copy without Dolby Vision", () => {
       name: "Make an HDR10 copy with these changes?",
     });
     expect(within(dialog).getByLabelText("Also left out")).toHaveTextContent("Audio 2: French");
+    // Only what's kept is described as coming across.
+    expect(within(dialog).getByTestId("hdr10-kept")).toHaveTextContent(
+      "Comes across (everything except the tracks left out below): 1 audio track, no subtitle tracks",
+    );
     await userEvent.click(within(dialog).getByRole("button", { name: "Make the copy" }));
     await waitFor(() => expect(bodies).toHaveLength(2));
     expect(bodies[0].remove).toHaveLength(1);

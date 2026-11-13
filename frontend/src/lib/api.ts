@@ -263,6 +263,8 @@ export type Hdr10CopyPreview = {
   /** What players show the copy as, e.g. ["HDR10"] or ["HDR10+", "HDR10"]. */
   result: string[];
   kept: string[];
+  /** How many of each kind of track the copy keeps (besides its main video). */
+  kept_counts: { video?: number; audio?: number; subtitles?: number };
   /** Tracks also left out, and setting changes, when made together with the HDR10 copy. */
   removed: string[];
   settings: { label: string; changes: string[] }[];
