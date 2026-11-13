@@ -100,9 +100,14 @@ up. Tailarr empties it after every job.
 
 ## Updating, and staying on one version
 
-`ghcr.io/benjamincandlin/tailarr:latest` is rebuilt every time a change is merged. On
-Unraid, use **Check for Updates** on the Docker page; with Compose,
-`docker compose pull && docker compose up -d`.
+`ghcr.io/benjamincandlin/tailarr:latest` is always the newest **release**: it only
+changes when a new version is published. On Unraid, use **Check for Updates** on the
+Docker page; with Compose, `docker compose pull && docker compose up -d`.
+
+**Trying changes before they're released:** `…/tailarr:edge` is rebuilt every time a
+change is merged, before it's part of a release. It's tested, but newer and less tried
+than `latest`. Change the image (Unraid: the **Repository** field) to `…/tailarr:edge`,
+and back to `…/tailarr:latest` when you're done.
 
 Every release also has its own image: `…/tailarr:1.0.0` (exactly that version) or
 `…/tailarr:1.0` (that version plus small fixes). To stay on one, change the image (Unraid:
