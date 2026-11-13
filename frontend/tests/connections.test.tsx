@@ -1,6 +1,6 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { CONNECTIONS, json, LIBRARY, mockBackend, renderApp } from "./helpers";
 
@@ -51,6 +51,44 @@ describe("connections", () => {
     await userEvent.click(within(plex).getByRole("button", { name: "Test Plex" }));
     expect(await within(plex).findByRole("alert")).toHaveTextContent("Docker network");
     expect(within(plex).getByText("Show technical details")).toBeInTheDocument();
+  });
+
+  it("uses the usual container address when the box is left empty", async () => {
+    const tested: { url: string }[] = [];
+    let saved: { sonarr: { url: string } } | null = null;
+    mockBackend((url, init) => {
+      if (url.endsWith("/api/settings/connections/test")) {
+        tested.push(JSON.parse(String(init?.body)));
+        return json({ ok: true, message: "Connected.", details: null });
+      }
+      if (url.endsWith("/api/settings/connections") && init?.method === "PUT") {
+        saved = JSON.parse(String(init.body));
+        return json(CONNECTIONS);
+      }
+      return undefined;
+    });
+    renderApp("/settings");
+    const sonarr = await screen.findByTestId("connection-sonarr");
+    await userEvent.type(within(sonarr).getByLabelText("API key"), "abc");
+    await userEvent.click(within(sonarr).getByRole("button", { name: "Test Sonarr" }));
+    await waitFor(() => expect(tested[0]?.url).toBe("http://sonarr:8989"));
+    await userEvent.click(screen.getByRole("button", { name: "Save connections" }));
+    await waitFor(() => expect(saved?.sonarr.url).toBe("http://sonarr:8989"));
+  });
+
+  it("copies the webhook address even on a plain http page", async () => {
+    Object.defineProperty(window, "isSecureContext", { value: false, configurable: true });
+    const exec = vi.fn(() => true);
+    Object.defineProperty(document, "execCommand", { value: exec, configurable: true });
+    mockBackend();
+    renderApp("/settings");
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Copy the Radarr webhook address" }),
+    );
+    expect(exec).toHaveBeenCalledWith("copy");
+    expect(
+      await screen.findByRole("button", { name: "Copy the Radarr webhook address" }),
+    ).toHaveTextContent("Copied");
   });
 
   it("only sends keys that were typed", async () => {

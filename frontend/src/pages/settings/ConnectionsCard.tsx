@@ -69,7 +69,8 @@ function ServiceBlock({
 }) {
   const [result, setResult] = useState<ConnectionTest | null>(null);
   const test = useMutation({
-    mutationFn: () => api.testConnection(service.key, draft.url, draft.key),
+    mutationFn: () =>
+      api.testConnection(service.key, draft.url.trim() || service.example, draft.key),
     onSuccess: setResult,
   });
   const connected = Boolean(saved.url && saved.has_key);
@@ -108,7 +109,9 @@ function ServiceBlock({
             autoCapitalize="off"
           />
           <p className="text-xs text-muted-foreground">
-            On a custom Docker network, use the container name, for example {service.example}.
+            Left empty, Tailarr uses {service.example} (the container name on a custom Docker
+            network). Otherwise use the server's address, for example http://192.168.1.10:
+            {service.example.split(":").at(-1)}.
           </p>
         </div>
         <div className="flex flex-col gap-1.5">
@@ -135,7 +138,7 @@ function ServiceBlock({
           type="button"
           variant="secondary"
           onClick={() => test.mutate()}
-          disabled={!draft.url || test.isPending}
+          disabled={(!draft.url.trim() && !draft.key && !saved.has_key) || test.isPending}
         >
           <PlugZap aria-hidden />
           {test.isPending ? "Testing…" : `Test ${service.label}`}
@@ -192,6 +195,32 @@ function Option({
   );
 }
 
+/**
+ * Copy text to the clipboard. Browsers only allow the modern way on https (or localhost);
+ * Tailarr is usually opened as http://server:8484, so fall back to selecting the text in
+ * the box and using the older copy command, which works there too.
+ */
+export async function copyText(value: string, inputId: string): Promise<boolean> {
+  if (window.isSecureContext && navigator.clipboard) {
+    try {
+      await navigator.clipboard.writeText(value);
+      return true;
+    } catch {
+      // fall through to the older way
+    }
+  }
+  const input = document.getElementById(inputId) as HTMLInputElement | null;
+  if (!input) return false;
+  input.focus();
+  input.select();
+  input.setSelectionRange(0, value.length);
+  try {
+    return document.execCommand("copy");
+  } catch {
+    return false; // the text stays selected, ready for Ctrl+C / long-press Copy
+  }
+}
+
 function CopyField({ label, value, id }: { label: string; value: string; id: string }) {
   const [copied, setCopied] = useState(false);
   return (
@@ -211,12 +240,9 @@ function CopyField({ label, value, id }: { label: string; value: string; id: str
           type="button"
           variant="secondary"
           onClick={async () => {
-            try {
-              await navigator.clipboard.writeText(value);
+            if (await copyText(value, id)) {
               setCopied(true);
               window.setTimeout(() => setCopied(false), 2000);
-            } catch {
-              document.getElementById(id)?.focus();
             }
           }}
           aria-label={`Copy the ${label}`}
@@ -357,10 +383,12 @@ function ConnectionsForm({ data }: { data: Connections }) {
 
   function onSubmit(event: FormEvent) {
     event.preventDefault();
-    const service = (key: ServiceName) => ({
-      url: draft[key].url,
-      ...(draft[key].key ? { api_key: draft[key].key } : {}),
-    });
+    const service = (key: ServiceName) => {
+      const example = SERVICES.find((s) => s.key === key)!.example;
+      // An empty address with a key typed in means "the usual container address".
+      const url = draft[key].url.trim() || (draft[key].key ? example : "");
+      return { url, ...(draft[key].key ? { api_key: draft[key].key } : {}) };
+    };
     save.mutate({
       radarr: service("radarr"),
       sonarr: service("sonarr"),

@@ -87,8 +87,11 @@ def health(
         check_folder(
             "work",
             "Work folder (optional)",
-            "Working space for making copies without Dolby Vision. Not needed: without it "
-            "Tailarr uses the film's folder.",
+            "Not needed: without it, HDR10 copies use the film's own folder for their working "
+            "files. Adding one on a fast SSD (such as your cache pool) makes HDR10 copies "
+            "quicker: in Unraid, edit the Tailarr container, choose “Add another Path, Port, "
+            "Variable”, and add a Path with container path /work and a host path such as "
+            "/mnt/cache/tailarr-work.",
             config.work_dir,
             False,
         ),

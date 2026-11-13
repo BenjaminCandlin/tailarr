@@ -506,3 +506,13 @@ def test_activity_list(app_client: TestClient) -> None:
     assert len(entries) == 1 and entries[0]["source"] == "sonarr"
     radarr = app_client.get("/api/activity?source=radarr").json()
     assert [e["source"] for e in radarr] == ["radarr"]
+
+
+def test_repeated_test_messages_are_logged_once(app_client: TestClient) -> None:
+    # Radarr sends one when "Test" is pressed and another when the connection is saved.
+    _hook(app_client, "radarr", {"eventType": "Test"})
+    _hook(app_client, "radarr", {"eventType": "Test"})
+    _hook(app_client, "sonarr", {"eventType": "Test"})
+    messages = [a["message"] for a in app_client.get("/api/activity").json()]
+    assert messages.count("Radarr sent a test message. The connection works.") == 1
+    assert messages.count("Sonarr sent a test message. The connection works.") == 1
