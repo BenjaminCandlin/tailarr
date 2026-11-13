@@ -80,7 +80,8 @@ Docker Compose for other servers):
 3. Open `http://<your-server>:8484` → **Settings**: every line of the System check
    should have a green tick.
 
-The image is `ghcr.io/benjamincandlin/tailarr` (`latest`, or a version such as `1.0.0`).
+The image is `ghcr.io/benjamincandlin/tailarr`: `latest` is the newest release, a version
+such as `1.0.0` stays fixed, and `edge` has changes merged since the last release.
 
 ## How things work
 

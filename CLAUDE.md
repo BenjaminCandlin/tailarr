@@ -151,7 +151,7 @@ one process, no external services.
 | Radarr/Sonarr/Plex APIs | `httpx` | Posters, path info, rescans, Plex refresh. |
 | Tests | **pytest** (backend, using real MKVToolNix on generated sample files), **Vitest** + Testing Library (UI parts), **Playwright** (whole app in desktop *and* phone sizes, with screenshots) | Real tools on real (tiny) files catch real problems. |
 | Container | Debian slim base, MKVToolNix + MediaInfo from apt, dovi_tool from GitHub release; small entrypoint script that applies PUID/PGID/UMASK | Familiar to Unraid users (same env vars as linuxserver.io images). |
-| Publishing | GitHub Actions → GitHub Container Registry `ghcr.io/benjamincandlin/tailarr` | Free; builds and publishes automatically on every merge to `main`. See "Public image" below. |
+| Publishing | GitHub Actions → GitHub Container Registry `ghcr.io/benjamincandlin/tailarr` | Free and automatic: every merge to `main` publishes `edge`; a GitHub release (tag `vX.Y.Z`) publishes `latest`, `X.Y.Z` and `X.Y`. People on `latest` only get releases. |
 | Unraid | Template XML in `unraid/tailarr.xml` | Downloaded once onto the Unraid flash drive (see `docs/INSTALL.md`); fields pre-filled. |
 
 ### Public repository, private notes
