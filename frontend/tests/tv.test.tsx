@@ -45,6 +45,8 @@ const PREVIEW: BatchPreview = {
       reason: null,
       hardlinked: false,
       new_file: "Another Show (2022) - S01E02 - Middle - Tailarr.mkv",
+      is_copy: false,
+      warnings: [],
     },
     {
       episode_id: 13,
@@ -55,11 +57,15 @@ const PREVIEW: BatchPreview = {
       reason: "Nothing to remove: every track is one you want to keep.",
       hardlinked: false,
       new_file: null,
+      is_copy: false,
+      warnings: [],
     },
   ],
   will_run: 1,
   skipped: 1,
   hardlinked_skipped: 0,
+  flagged: 0,
+  copies: 0,
   space: [{ label: "the disk with your files", needed: 2e9, free: 5e11, enough: true }],
   enough_space: true,
 };
@@ -131,6 +137,7 @@ describe("batch actions", () => {
       defaultAudio: null,
       defaultSubtitles: "keep" as const,
       defaultSubtitleLanguage: null,
+      hdr10Tracks: false,
     };
     expect(missingChoice(start)).toMatch(/Choose which/);
     expect(missingChoice({ ...start, subtitleMode: "only", subtitleLanguages: [] })).toMatch(
@@ -189,6 +196,7 @@ describe("batch actions", () => {
         overwrite: false,
       },
       allow_hardlinked: false,
+      include_copies: false,
     });
     expect(within(summary).getByTestId("batch-counts")).toHaveTextContent(
       "1 episode will get a copy, 1 skipped.",
@@ -291,5 +299,83 @@ describe("queue groups", () => {
     await waitFor(() => expect(cancelled).toBe(true));
     const finished = screen.getByRole("region", { name: /Finished/ });
     expect(within(finished).getByTestId("job-3")).toBeInTheDocument();
+  });
+});
+
+describe("batches with copies and flags", () => {
+  it("can include Tailarr's copies and shows flagged files", async () => {
+    const sent: BatchRequest[] = [];
+    tvBackend((url, init) => {
+      if (url.endsWith("/batch/preview")) {
+        const body = JSON.parse(String(init?.body)) as BatchRequest;
+        sent.push(body);
+        return json({
+          ...PREVIEW,
+          copies: 1,
+          flagged: 1,
+          files: [
+            { ...PREVIEW.files[0], warnings: ["No subtitles would be left in this file."] },
+            ...(body.include_copies
+              ? [
+                  {
+                    ...PREVIEW.files[0],
+                    label: "S01E02 – Middle (Tailarr's copy)",
+                    file: "Another Show (2022) - S01E02 - Middle - HDR10.mkv",
+                    is_copy: true,
+                    new_file: null,
+                  },
+                ]
+              : []),
+          ],
+          will_run: body.include_copies ? 2 : 1,
+        });
+      }
+      return undefined;
+    });
+    renderApp("/tv/shows/2");
+    await userEvent.click(await screen.findByRole("button", { name: /Change this season/ }));
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Show what will happen" }));
+    const summary = await screen.findByRole("dialog", { name: "Check before starting" });
+    expect(within(summary).getByTestId("batch-counts")).toHaveTextContent("1 file flagged");
+    expect(within(summary).getByTestId("batch-warning")).toHaveTextContent(
+      "No subtitles would be left",
+    );
+    expect(within(summary).getByText(/also have 1 copy made by Tailarr/)).toBeInTheDocument();
+    await userEvent.click(within(summary).getByRole("button", { name: "Back" }));
+    await userEvent.click(
+      within(dialog).getByRole("checkbox", { name: /Also change the copies Tailarr made/ }),
+    );
+    await userEvent.click(within(dialog).getByRole("button", { name: "Show what will happen" }));
+    expect(await within(dialog).findByText("S01E02 – Middle (Tailarr's copy)")).toBeInTheDocument();
+    expect(sent.at(-1)?.include_copies).toBe(true);
+  });
+
+  it("offers track changes inside the HDR10 copies", async () => {
+    const sent: BatchRequest[] = [];
+    tvBackend((url, init) => {
+      if (url.endsWith("/batch/preview")) {
+        sent.push(JSON.parse(String(init?.body)));
+        return json(PREVIEW);
+      }
+      return undefined;
+    });
+    renderApp("/tv/shows/2");
+    await userEvent.click(await screen.findByRole("button", { name: /Change this season/ }));
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.click(
+      within(dialog).getByRole("checkbox", { name: /Also change tracks in the copies/ }),
+    );
+    await userEvent.selectOptions(
+      within(dialog).getByLabelText("Default audio", { exact: true }),
+      "fre",
+    );
+    await userEvent.click(within(dialog).getByRole("button", { name: "Show what will happen" }));
+    await waitFor(() => expect(sent).toHaveLength(1));
+    expect(sent[0].action).toMatchObject({
+      type: "hdr10_copy",
+      subtitles: { mode: "only", languages: ["eng"] },
+      default_audio: "fre",
+    });
   });
 });

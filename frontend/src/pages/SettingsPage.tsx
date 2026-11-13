@@ -9,6 +9,7 @@ import { ConnectionsCard } from "./settings/ConnectionsCard";
 import { LibraryFoldersCard } from "./settings/LibraryFoldersCard";
 import { LoginCard } from "./settings/LoginCard";
 import { RecycleCard } from "./settings/RecycleCard";
+import { WorkFolderCard } from "./settings/WorkFolderCard";
 import { SystemCheckCard } from "./settings/SystemCheckCard";
 
 export function SettingsPage() {
@@ -17,7 +18,7 @@ export function SettingsPage() {
     <>
       <PageHeader
         title="Settings"
-        description="Folders, connections, automatic rules, login, appearance, the recycle folder and a check that everything works."
+        description="Folders, connections, automatic rules, login, appearance, the recycle and work folders and a check that everything works."
       />
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
         <div className="xl:col-span-2">
@@ -30,6 +31,7 @@ export function SettingsPage() {
         </div>
         <AutomationCard />
         <RecycleCard />
+        <WorkFolderCard />
         <LoginCard />
       </div>
       <p className="mt-8 text-center text-xs text-muted-foreground">

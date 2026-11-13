@@ -82,9 +82,11 @@ function Option({
 
 function ConditionsEditor({
   conditions,
+  match,
   onChange,
 }: {
   conditions: Condition[];
+  match: RuleInput["match"];
   onChange: (conditions: Condition[]) => void;
 }) {
   const used = conditions.map((c) => c.type);
@@ -104,7 +106,7 @@ function ConditionsEditor({
             <li key={condition.type} className="flex flex-col gap-2 rounded-lg border p-3">
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium">
-                  {index === 0 ? "If" : "and"} {meta.label}
+                  {index === 0 ? "If" : match === "any" ? "or" : "and"} {meta.label}
                 </span>
                 <Button
                   type="button"
@@ -169,6 +171,7 @@ function RuleForm({ initial, ruleId }: { initial: RuleInput; ruleId: number | nu
   const [enabled, setEnabled] = useState(initial.enabled);
   const [scope, setScope] = useState(initial.scope);
   const [conditions, setConditions] = useState<Condition[]>(initial.conditions);
+  const [match, setMatch] = useState<RuleInput["match"]>(initial.match ?? "all");
   const [choices, setChoices] = useState<Choices>(() => choicesFromAction(initial.action));
   const [allowOriginals, setAllowOriginals] = useState(initial.allow_originals);
   const [allowHardlinked, setAllowHardlinked] = useState(initial.allow_hardlinked);
@@ -178,6 +181,7 @@ function RuleForm({ initial, ruleId }: { initial: RuleInput; ruleId: number | nu
     enabled,
     scope,
     conditions,
+    match,
     action: actionOf(choices),
     allow_originals: allowOriginals,
     allow_hardlinked: allowOriginals && allowHardlinked,
@@ -251,8 +255,28 @@ function RuleForm({ initial, ruleId }: { initial: RuleInput; ruleId: number | nu
               <option value="both">film or episode</option>
             </select>
           </div>
+          {conditions.length > 1 && (
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="rule-match" className="text-sm font-medium">
+                The rule applies when
+              </label>
+              <select
+                id="rule-match"
+                value={match}
+                onChange={(e) => {
+                  setMatch(e.target.value as RuleInput["match"]);
+                  preview.reset();
+                }}
+                className={SELECT_CLASS}
+              >
+                <option value="all">all of these conditions are true</option>
+                <option value="any">any one of these conditions is true</option>
+              </select>
+            </div>
+          )}
           <ConditionsEditor
             conditions={conditions}
+            match={match}
             onChange={(c) => {
               setConditions(c);
               preview.reset();
@@ -388,6 +412,7 @@ const BLANK: RuleInput = {
   action: actionOf(START),
   allow_originals: false,
   allow_hardlinked: false,
+  match: "all",
 };
 
 export function RuleEditorPage() {

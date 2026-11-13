@@ -80,3 +80,12 @@ describe("settings page", () => {
     expect(within(alert).queryByText(/Value error/)).toBeNull();
   });
 });
+
+describe("work folder", () => {
+  it("explains how to add one when it isn't set up", async () => {
+    mockBackend();
+    renderApp("/settings");
+    expect(await screen.findByTestId("work-folder-status")).toHaveTextContent("Not set up");
+    expect(screen.getByText(/Container Path/)).toBeInTheDocument();
+  });
+});
