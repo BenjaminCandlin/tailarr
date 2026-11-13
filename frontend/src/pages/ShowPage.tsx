@@ -129,9 +129,11 @@ function ShowDetailView({ show }: { show: ShowDetail }) {
       </div>
       {batch && (
         <BatchDialog
-          showId={show.id}
-          season={batch.season}
+          target={{ kind: "show", showId: show.id, season: batch.season }}
           scopeLabel={`${batch.label} of ${show.title}`}
+          hasCopies={show.seasons
+            .filter((s) => batch.season === null || s.season === batch.season)
+            .some((s) => s.episodes.some((e) => e.has_copy))}
           open
           onOpenChange={(open) => !open && setBatch(null)}
         />

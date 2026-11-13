@@ -37,7 +37,8 @@ const PREVIEW: BatchPreview = {
   changes_originals: false,
   files: [
     {
-      episode_id: 12,
+      kind: "episode",
+      item_id: 12,
       label: "S01E02 – Middle",
       file: "Another Show (2022) - S01E02 - Middle.mkv",
       will_run: true,
@@ -49,7 +50,8 @@ const PREVIEW: BatchPreview = {
       warnings: [],
     },
     {
-      episode_id: 13,
+      kind: "episode",
+      item_id: 13,
       label: "S01E03 – End",
       file: "Another Show (2022) - S01E03 - End.mkv",
       will_run: false,
@@ -160,7 +162,7 @@ describe("batch actions", () => {
   });
 
   it("previews a season and starts one job per episode", async () => {
-    const sent: BatchRequest[] = [];
+    const sent: (BatchRequest & { season?: number | null })[] = [];
     let started = false;
     tvBackend((url, init) => {
       if (url.endsWith("/api/tv/shows/2/batch/preview")) {
@@ -196,7 +198,7 @@ describe("batch actions", () => {
         overwrite: false,
       },
       allow_hardlinked: false,
-      include_copies: false,
+      include_copies: true, // S01E01 has a copy: changed too unless unticked
     });
     expect(within(summary).getByTestId("batch-counts")).toHaveTextContent(
       "1 episode will get a copy, 1 skipped.",
@@ -210,7 +212,7 @@ describe("batch actions", () => {
   });
 
   it("asks before changing seeding originals", async () => {
-    const sent: BatchRequest[] = [];
+    const sent: (BatchRequest & { season?: number | null })[] = [];
     tvBackend((url, init) => {
       if (url.endsWith("/batch/preview")) {
         const body = JSON.parse(String(init?.body)) as BatchRequest;
@@ -303,7 +305,7 @@ describe("queue groups", () => {
 });
 
 describe("batches with copies and flags", () => {
-  it("can include Tailarr's copies and shows flagged files", async () => {
+  it("changes copies too by default, and shows flagged files", async () => {
     const sent: BatchRequest[] = [];
     tvBackend((url, init) => {
       if (url.endsWith("/batch/preview")) {
@@ -335,24 +337,29 @@ describe("batches with copies and flags", () => {
     renderApp("/tv/shows/2");
     await userEvent.click(await screen.findByRole("button", { name: /Change this season/ }));
     const dialog = await screen.findByRole("dialog");
+    // Plain HDR10 copies don't change copies, so the tick isn't offered…
+    expect(within(dialog).queryByRole("checkbox", { name: /Also change the copies/ })).toBeNull();
+    // …but removing tracks does, and it's ticked because this season has copies.
+    await userEvent.click(within(dialog).getByRole("radio", { name: /Save copies without some/ }));
+    const copiesTick = within(dialog).getByRole("checkbox", { name: /Also change the copies/ });
+    expect(copiesTick).toBeChecked();
     await userEvent.click(within(dialog).getByRole("button", { name: "Show what will happen" }));
     const summary = await screen.findByRole("dialog", { name: "Check before starting" });
+    expect(within(summary).getByText("S01E02 – Middle (Tailarr's copy)")).toBeInTheDocument();
     expect(within(summary).getByTestId("batch-counts")).toHaveTextContent("1 file flagged");
     expect(within(summary).getByTestId("batch-warning")).toHaveTextContent(
       "No subtitles would be left",
     );
-    expect(within(summary).getByText(/also have 1 copy made by Tailarr/)).toBeInTheDocument();
-    await userEvent.click(within(summary).getByRole("button", { name: "Back" }));
-    await userEvent.click(
-      within(dialog).getByRole("checkbox", { name: /Also change the copies Tailarr made/ }),
-    );
-    await userEvent.click(within(dialog).getByRole("button", { name: "Show what will happen" }));
-    expect(await within(dialog).findByText("S01E02 – Middle (Tailarr's copy)")).toBeInTheDocument();
     expect(sent.at(-1)?.include_copies).toBe(true);
+    await userEvent.click(within(summary).getByRole("button", { name: "Back" }));
+    await userEvent.click(within(dialog).getByRole("checkbox", { name: /Also change the copies/ }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Show what will happen" }));
+    expect(await within(dialog).findByText(/also have 1 copy made by Tailarr/)).toBeInTheDocument();
+    expect(sent.at(-1)?.include_copies).toBe(false);
   });
 
   it("offers track changes inside the HDR10 copies", async () => {
-    const sent: BatchRequest[] = [];
+    const sent: (BatchRequest & { season?: number | null })[] = [];
     tvBackend((url, init) => {
       if (url.endsWith("/batch/preview")) {
         sent.push(JSON.parse(String(init?.body)));

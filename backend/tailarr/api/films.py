@@ -11,7 +11,7 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
 from ..connections.models import ExternalInfo
@@ -19,11 +19,21 @@ from ..connections.service import external_info
 from ..core.config import AppConfig
 from ..core.paths import is_inside
 from ..core.settings_store import get_library_settings
+from ..jobs.engine import JobQueue
 from ..library.artwork import thumbnail
 from ..library.media_reader import MediaReader
 from ..library.models import Film, FilmFile
 from ..library.naming import sort_key
 from ..library.scanner import FilmScanner
+from .batch import (
+    BatchIn,
+    BatchPreviewOut,
+    BatchStartedOut,
+    BatchTarget,
+    PlannedBatch,
+    plan_batch,
+    start_batch,
+)
 from .common import (
     NOT_READ,
     FileOut,
@@ -42,6 +52,7 @@ from .common import (
 )
 from .deps import get_config, get_session
 from .external import arr_artwork, artwork_version
+from .jobs import get_queue
 
 router = APIRouter(prefix="/api/films")
 
@@ -245,3 +256,74 @@ def film_backdrop(
     session: Annotated[Session, Depends(get_session)],
 ) -> Response:
     return FileResponse(_artwork(session, config, film_id, "backdrop"), headers=_LONG_CACHE)
+
+
+# -- change many films at once ------------------------------------------------------------
+
+
+class FilmsBatchIn(BatchIn):
+    film_ids: list[int] = Field(min_length=1, max_length=20000)
+
+
+class FilmsBatchConfirmIn(FilmsBatchIn):
+    confirmed: bool = False
+
+
+def _films_batch(
+    session: Session, config: AppConfig, reader: MediaReader, body: FilmsBatchIn
+) -> PlannedBatch:
+    root = _films_root(session, config)
+    infos = external_info(session)
+    targets = []
+    for film_id in dict.fromkeys(body.film_ids):
+        film = session.get(Film, film_id)
+        if film is None or not is_inside(film.folder, root):
+            continue  # gone since the page was loaded
+        subject = subject_of(film, infos.get(film.folder))
+        targets.append(
+            BatchTarget(
+                kind="film",
+                id=film_id,
+                label=subject,
+                subject=subject,
+                main_file=film.main_file,
+                files=list(_files(session, film)),
+                root=root,
+            )
+        )
+    if not targets:
+        raise HTTPException(
+            status_code=404,
+            detail="None of these films are in your library any more. Check for new films.",
+        )
+    targets.sort(key=lambda t: sort_key(t.label))
+    scope = targets[0].label if len(targets) == 1 else f"{len(targets)} films"
+    return plan_batch(session, config, reader, targets, body, scope)
+
+
+@router.post("/batch/preview", response_model=BatchPreviewOut)
+def preview_films_batch(
+    body: FilmsBatchIn,
+    config: Annotated[AppConfig, Depends(get_config)],
+    session: Annotated[Session, Depends(get_session)],
+    reader: Annotated[MediaReader, Depends(get_reader)],
+) -> BatchPreviewOut:
+    """What an action would do to each chosen film. Changes nothing.
+
+    Films Tailarr hasn't read yet are read now, which can take a while for many films.
+    """
+    return _films_batch(session, config, reader, body).preview
+
+
+@router.post("/batch", response_model=BatchStartedOut, status_code=202)
+def start_films_batch(
+    body: FilmsBatchConfirmIn,
+    config: Annotated[AppConfig, Depends(get_config)],
+    session: Annotated[Session, Depends(get_session)],
+    reader: Annotated[MediaReader, Depends(get_reader)],
+    queue: Annotated[JobQueue, Depends(get_queue)],
+) -> BatchStartedOut:
+    """Queue one job per film (shown as a group in the queue), after confirmation."""
+    if not body.confirmed:
+        raise HTTPException(status_code=400, detail="Please confirm the summary first.")
+    return start_batch(session, queue, _films_batch(session, config, reader, body), "films")

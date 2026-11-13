@@ -6,8 +6,6 @@ The actions on one episode's files are in actions.py (shared with films), under
 
 from __future__ import annotations
 
-import time
-import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Literal
@@ -17,29 +15,28 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlmodel import Session, col, select
 
-from ..actions.plans import (
-    Action,
-    FilePlan,
-    changes_originals,
-    describe_action,
-    plan_file,
-    space_totals,
-)
 from ..connections.models import ExternalInfo
 from ..connections.service import external_info
 from ..core.config import AppConfig
 from ..core.paths import is_inside
 from ..core.settings_store import get_library_settings
 from ..jobs.engine import JobQueue
-from ..jobs.hdr10_copy import usable_work_folder
-from ..jobs.models import JobGroup
 from ..library.artwork import thumbnail
-from ..library.media_reader import MediaReader, details_of
+from ..library.media_reader import MediaReader
 from ..library.models import Episode, EpisodeFile, Show
 from ..library.naming import sort_key
 from ..library.tv_naming import episode_label, season_label
 from ..library.tv_scanner import TvScanner
 from ..media.languages import language_choices
+from .batch import (
+    BatchIn,
+    BatchPreviewOut,
+    BatchStartedOut,
+    BatchTarget,
+    PlannedBatch,
+    plan_batch,
+    start_batch,
+)
 from .common import (
     NOT_READ,
     FileOut,
@@ -468,58 +465,12 @@ def episode_detail(
 # -- batch actions on a season or a whole show ----------------------------------------------
 
 
-class BatchIn(BaseModel):
+class TvBatchIn(BatchIn):
     season: int | None = None  # None: the whole show
-    action: Action
-    # Tick "I understand" for files that are also in the downloads folder (still seeding).
-    allow_hardlinked: bool = False
-    # Also change the copies Tailarr made of these episodes (updated where they are).
-    include_copies: bool = False
 
 
-class BatchConfirmIn(BatchIn):
+class TvBatchConfirmIn(TvBatchIn):
     confirmed: bool = False
-
-
-class BatchFileOut(BaseModel):
-    episode_id: int
-    label: str  # "S01E02 – The Second One"
-    file: str
-    will_run: bool
-    lines: list[str]
-    reason: str | None
-    hardlinked: bool
-    new_file: str | None
-    is_copy: bool = False  # one of Tailarr's copies (only with "also change copies")
-    warnings: list[str] = []  # worth a look, e.g. no subtitles would be left
-
-
-class SpaceTotalOut(BaseModel):
-    label: str
-    needed: int
-    free: int
-    enough: bool
-
-
-class BatchPreviewOut(BaseModel):
-    title: str  # "Make a copy without Dolby Vision: Test Show, Season 1"
-    action: str
-    scope: str  # "Test Show, Season 1"
-    changes_originals: bool
-    files: list[BatchFileOut]
-    will_run: int
-    skipped: int
-    hardlinked_skipped: int  # seeding files left out because "I understand" isn't ticked
-    flagged: int  # files worth a look (e.g. no subtitles or no audio would be left)
-    copies: int  # Tailarr copies these episodes have (offered with "also change copies")
-    space: list[SpaceTotalOut]
-    enough_space: bool
-
-
-class BatchStartedOut(BaseModel):
-    group_id: str
-    title: str
-    jobs: int
 
 
 def _scope(show: Show, season: int | None, info: ExternalInfo | None = None) -> str:
@@ -527,121 +478,37 @@ def _scope(show: Show, season: int | None, info: ExternalInfo | None = None) -> 
     return title if season is None else f"{title}, {season_label(season)}"
 
 
-def _batch_plans(
-    session: Session,
-    config: AppConfig,
-    reader: MediaReader,
-    show: Show,
-    body: BatchIn,
-) -> tuple[list[tuple[Episode, FilePlan]], list[SpaceTotalOut]]:
+def _tv_batch(
+    session: Session, config: AppConfig, reader: MediaReader, show_id: int, body: TvBatchIn
+) -> PlannedBatch:
+    show = _get_show(session, config, show_id)
     episodes = _episodes(session, show, body.season)
     if body.season is not None and not episodes:
         raise HTTPException(status_code=404, detail="This show has no episodes in that season.")
+    info = session.get(ExternalInfo, show.folder)
     root = _tv_root(session, config)
-    plans: list[tuple[Episode, FilePlan]] = []
+    targets = []
     for episode in episodes:
-        files = _episode_files(session, episode)
-        main = next((f for f in files if f.name == episode.main_file), None)
-        targets = [main] if main is not None else []
-        if body.include_copies:
-            targets += [f for f in files if f.is_copy and f is not main]
-        for file in targets:
-            if not is_inside(file.path, root):
-                continue
-            details, error = None, None
-            try:
-                record = reader.get(session, file.path)
-                details = details_of(record)
-                error = record.error
-            except OSError:
-                error = "This file can't be opened any more."
-            plans.append(
-                (
-                    episode,
-                    plan_file(
-                        body.action,
-                        file.path,
-                        details,
-                        is_copy=file.is_copy,
-                        update_copies=body.include_copies,
-                        allow_hardlinked=body.allow_hardlinked,
-                        read_error=error,
-                    ),
-                )
-            )
-    totals = space_totals([p for _, p in plans], usable_work_folder(config.work_dir))
-    space = [
-        SpaceTotalOut(label=t.label, needed=t.needed, free=t.free, enough=t.enough) for t in totals
-    ]
-    return plans, space
-
-
-def _batch_preview(
-    session: Session, config: AppConfig, reader: MediaReader, show_id: int, body: BatchIn
-) -> tuple[BatchPreviewOut, list[tuple[Episode, FilePlan]], Show]:
-    show = _get_show(session, config, show_id)
-    plans, space = _batch_plans(session, config, reader, show, body)
-    action = describe_action(body.action)
-    scope = _scope(show, body.season, session.get(ExternalInfo, show.folder))
-    files = []
-    for episode, plan in plans:
         label = episode_label(episode.season, episode.episode, episode.episode_end)
-        text = " – ".join(p for p in (label, episode.title) if p) or plan.name
-        if plan.is_copy:
-            text += " (Tailarr's copy)"
-        files.append(
-            BatchFileOut(
-                episode_id=episode.id,  # type: ignore[arg-type]
-                label=text,
-                file=plan.name,
-                will_run=plan.will_run,
-                lines=plan.lines,
-                reason=plan.reason,
-                hardlinked=plan.hardlinked,
-                new_file=plan.new_file,
-                is_copy=plan.is_copy,
-                warnings=plan.warnings,
+        targets.append(
+            BatchTarget(
+                kind="episode",
+                id=episode.id,  # type: ignore[arg-type]
+                label=" – ".join(p for p in (label, episode.title) if p)
+                or (episode.main_file or ""),
+                subject=episode_subject(episode, show, info),
+                main_file=episode.main_file,
+                files=list(_episode_files(session, episode)),
+                root=root,
             )
         )
-    copies = len(
-        session.exec(
-            select(EpisodeFile.id).where(
-                EpisodeFile.show_id == show.id, col(EpisodeFile.is_copy).is_(True)
-            )
-        ).all()
-    )
-    if body.season is not None:
-        season_ids = {e.id for e in _episodes(session, show, body.season)}
-        copies = len(
-            [
-                f
-                for f in session.exec(
-                    select(EpisodeFile).where(EpisodeFile.show_id == show.id)
-                ).all()
-                if f.is_copy and f.episode_id in season_ids
-            ]
-        )
-    preview = BatchPreviewOut(
-        title=f"{action}: {scope}",
-        action=action,
-        scope=scope,
-        changes_originals=changes_originals(body.action),
-        files=files,
-        will_run=sum(1 for _, p in plans if p.will_run),
-        skipped=sum(1 for _, p in plans if not p.will_run),
-        hardlinked_skipped=sum(1 for _, p in plans if not p.will_run and p.hardlinked),
-        flagged=sum(1 for _, p in plans if p.warnings),
-        copies=copies,
-        space=space,
-        enough_space=all(s.enough for s in space),
-    )
-    return preview, plans, show
+    return plan_batch(session, config, reader, targets, body, _scope(show, body.season, info))
 
 
 @router.post("/shows/{show_id}/batch/preview", response_model=BatchPreviewOut)
 def preview_batch(
     show_id: int,
-    body: BatchIn,
+    body: TvBatchIn,
     config: Annotated[AppConfig, Depends(get_config)],
     session: Annotated[Session, Depends(get_session)],
     reader: Annotated[MediaReader, Depends(get_reader)],
@@ -650,13 +517,13 @@ def preview_batch(
 
     Episodes Tailarr hasn't read yet are read now, which can take a while for a big show.
     """
-    return _batch_preview(session, config, reader, show_id, body)[0]
+    return _tv_batch(session, config, reader, show_id, body).preview
 
 
 @router.post("/shows/{show_id}/batch", response_model=BatchStartedOut, status_code=202)
-def start_batch(
+def start_tv_batch(
     show_id: int,
-    body: BatchConfirmIn,
+    body: TvBatchConfirmIn,
     config: Annotated[AppConfig, Depends(get_config)],
     session: Annotated[Session, Depends(get_session)],
     reader: Annotated[MediaReader, Depends(get_reader)],
@@ -665,33 +532,8 @@ def start_batch(
     """Queue one job per episode (shown as a group in the queue), after confirmation."""
     if not body.confirmed:
         raise HTTPException(status_code=400, detail="Please confirm the summary first.")
-    preview, plans, show = _batch_preview(session, config, reader, show_id, body)
-    if preview.will_run == 0:
-        raise HTTPException(status_code=400, detail="There's nothing to do for these episodes.")
-    if not preview.enough_space:
-        raise HTTPException(
-            status_code=507,
-            detail="Not enough free space for all of these copies. Free up some space, or "
-            "choose one season at a time.",
-        )
-    group = JobGroup(id=uuid.uuid4().hex, title=preview.title, created_at=time.time())
-    session.add(group)
-    session.commit()
-    count = 0
-    for episode, plan in plans:
-        if not plan.will_run or plan.job_kind is None:
-            continue
-        queue.submit(
-            plan.job_kind,
-            title=plan.job_title or plan.job_kind,
-            subject=episode_subject(episode, show, session.get(ExternalInfo, show.folder)),
-            path=plan.path,
-            params=plan.params,
-            episode_id=episode.id,
-            group_id=group.id,
-        )
-        count += 1
-    return BatchStartedOut(group_id=group.id, title=group.title, jobs=count)
+    batch = _tv_batch(session, config, reader, show_id, body)
+    return start_batch(session, queue, batch, "episodes")
 
 
 # -- languages for pickers ----------------------------------------------------------------
