@@ -200,3 +200,34 @@ def test_files_left_without_subtitles_are_flagged(app_client: TestClient) -> Non
         for f in no_audio["files"]
     )
     assert no_audio["flagged"] == 3
+
+
+def test_change_many_films_at_once(app_client: TestClient, config) -> None:
+    films = {f["folder_name"]: f["id"] for f in app_client.get("/api/films").json()["films"]}
+    chosen = [
+        films[COLOUR],
+        films["Blu-ray Night (2018) {imdb-tt0000001}"],
+        films["Bright Lights (2019)"],
+    ]
+    body = {"film_ids": chosen, "action": {"type": "hdr10_copy"}}
+    preview = app_client.post("/api/films/batch/preview", json=body).json()
+    assert preview["scope"] == "3 films"
+    by_label = {f["label"]: f for f in preview["files"]}
+    assert by_label["Blu-ray Night (2018)"]["will_run"] is True
+    assert "already exists" in by_label["Colour Test (2023)"]["reason"]
+    assert "no Dolby Vision" in by_label["Bright Lights (2019)"]["reason"]
+    assert all(f["kind"] == "film" for f in preview["files"])
+    assert preview["copies"] == 1  # Colour Test's HDR10 copy
+    one = app_client.post(
+        "/api/films/batch/preview", json={**body, "film_ids": [films[COLOUR]]}
+    ).json()
+    assert one["scope"] == "Colour Test (2023)"
+    assert app_client.post("/api/films/batch", json=body).status_code == 400  # not confirmed
+    started = app_client.post("/api/films/batch", json={**body, "confirmed": True}).json()
+    assert started["jobs"] == 1
+    jobs = _wait_all(app_client)
+    assert [j["status"] for j in jobs] == ["done"] and jobs[0]["film_id"] == chosen[1]
+    assert (
+        app_client.post("/api/films/batch/preview", json={**body, "film_ids": [999999]}).status_code
+        == 404
+    )
