@@ -18,19 +18,21 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from sqlalchemy import Engine
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from ..core.paths import PathMapping, is_inside, map_remote_path
 from ..jobs import hdr10_copy, remove_tracks
 from ..jobs.models import CopyRecord
 from ..jobs.recycle import move_to_recycle
 from ..library.naming import is_tailarr_copy
+from .models import ActivityEntry
 from .service import record_activity
 
 log = logging.getLogger(__name__)
@@ -176,6 +178,17 @@ def rename_copies_of(
     return renamed
 
 
+def _recently_logged(engine: Engine, service: str, message: str, seconds: float = 120) -> bool:
+    """Radarr/Sonarr send a test message for "Test" and again for "Save": log it once."""
+    with Session(engine) as session:
+        latest = session.exec(
+            select(ActivityEntry)
+            .where(ActivityEntry.source == service, ActivityEntry.message == message)
+            .order_by(col(ActivityEntry.at).desc())
+        ).first()
+    return latest is not None and time.time() - latest.at < seconds
+
+
 def _copies(count: int) -> str:
     return f"{count} Tailarr cop{'y' if count == 1 else 'ies'}"
 
@@ -260,7 +273,8 @@ def handle(
         folder = item.get("folderPath") or item.get("path")
         if folder and inside(local(folder)):
             result.folders = [local(folder)]
-    record_activity(engine, service, "webhook", result.message, path=None)
+    if not (event == "Test" and _recently_logged(engine, service, result.message)):
+        record_activity(engine, service, "webhook", result.message, path=None)
     for folder in result.folders:
         try:
             folder_changed(folder)

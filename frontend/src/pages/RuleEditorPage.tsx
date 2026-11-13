@@ -323,7 +323,10 @@ function RuleForm({ initial, ruleId }: { initial: RuleInput; ruleId: number | nu
         <CardHeader>
           <CardTitle>Preview</CardTitle>
           <CardDescription>
-            What this rule would do to your library right now. Nothing is changed.
+            What this rule would do if you ran it on your whole library now (with “Preview and run
+            now” on the Rules page). Nothing is changed. When the rule is switched on, it only looks
+            at new and upgraded files as they arrive: it never goes back through the films already
+            there by itself.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
