@@ -191,6 +191,8 @@ class Hdr10CopyPreviewOut(BaseModel):
     blu_ray_layers: bool  # profile 7 with an enhancement layer, which is left out too
     result: list[str]  # what players show the copy as, e.g. ["HDR10"], ["HDR10+", "HDR10"]
     kept: list[str]  # the other tracks that are kept
+    # How many of each kind of track the copy keeps (besides its main video).
+    kept_counts: dict[str, int] = {}
     removed: list[str] = []  # tracks left out of the copy too
     settings: list[SettingChangeOut] = []  # setting changes in the copy
     warnings: list[str] = []
@@ -499,6 +501,10 @@ def make_router(prefix: str, load_item: ItemLoader) -> APIRouter:
             blu_ray_layers=details.hdr.dv_dual_layer,
             result=plan.expected_formats,
             kept=[remove_tracks.describe_track(t, details) for t in plan.kept_others],
+            kept_counts={
+                kind: sum(1 for t in plan.kept_others if t.type == kind)
+                for kind in ("video", "audio", "subtitles")
+            },
             removed=[remove_tracks.describe_track(t, details) for t in tracks.removed]
             if tracks
             else [],

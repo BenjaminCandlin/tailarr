@@ -60,6 +60,9 @@ def test_hdr10_copy_with_track_changes_in_one_go(app_client: TestClient, config)
     }
     preview = app_client.post(f"/api/films/{film}/hdr10-copy/preview", json=body).json()
     assert len(preview["removed"]) == 1 and "Subtitles 2" in preview["removed"][0]
+    # Exactly what comes across: both audio tracks, and only the subtitle that's kept.
+    assert preview["kept_counts"] == {"video": 0, "audio": 2, "subtitles": 1}
+    assert not any("Forced" in line for line in preview["kept"])
     assert preview["settings"][0]["label"].startswith("Audio 2")
     job = app_client.post(
         f"/api/films/{film}/hdr10-copy", json={**body, "confirmed": True, "overwrite": True}

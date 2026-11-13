@@ -10,6 +10,25 @@ import { api, type ItemRef, type Hdr, type Hdr10CopyPreview, type Job } from "@/
 import { refreshLibrary } from "@/lib/jobs";
 import { formatSize, plural } from "@/lib/format";
 
+/**
+ * Exactly what comes across into the copy, e.g. "Comes across: 2 audio tracks, 1 subtitle
+ * track, 2 chapters, 1 attachment and the exact frame rate." Counts only the tracks that
+ * are kept, so unticked tracks are never described as coming across.
+ */
+export function keptSentence(preview: Hdr10CopyPreview): string {
+  const counts = preview.kept_counts ?? {};
+  const parts: string[] = [];
+  if (counts.video) parts.push(plural(counts.video, "other video track"));
+  parts.push(plural(counts.audio ?? 0, "audio track"));
+  parts.push(counts.subtitles ? plural(counts.subtitles, "subtitle track") : "no subtitle tracks");
+  parts.push(plural(preview.chapters, "chapter"));
+  parts.push(plural(preview.attachments, "attachment"));
+  const lead = preview.removed.length
+    ? "Comes across (everything except the tracks left out below)"
+    : "Everything else comes across";
+  return `${lead}: ${parts.join(", ")}, and the exact frame rate.`;
+}
+
 export function Hdr10Summary({
   preview,
   overwrite,
@@ -20,6 +39,8 @@ export function Hdr10Summary({
   onOverwrite: (value: boolean) => void;
 }) {
   const shows = preview.result.join(" and ") || "HDR10";
+  // Tracks left out or changed: show exactly what the copy will have, unfolded.
+  const changed = preview.removed.length > 0 || preview.settings.length > 0;
   return (
     <>
       <div className="rounded-lg border bg-muted/50 px-3 py-2">
@@ -42,11 +63,7 @@ export function Hdr10Summary({
             The picture underneath is kept exactly as it is: nothing is re-encoded. Players without
             Dolby Vision show the copy as <span className="text-foreground">{shows}</span>.
           </li>
-          <li>
-            {preview.removed.length ? "The rest comes across" : "Everything else comes across"}:{" "}
-            {plural(preview.kept.length, "other track")}, {plural(preview.chapters, "chapter")},{" "}
-            {plural(preview.attachments, "attachment")}, and the exact frame rate.
-          </li>
+          <li data-testid="hdr10-kept">{keptSentence(preview)}</li>
           <li>Plex shows the copy as a second version of the film.</li>
         </ul>
       </div>
@@ -80,7 +97,7 @@ export function Hdr10Summary({
           {warning}
         </p>
       ))}
-      <details>
+      <details open={changed}>
         <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
           Tracks in the copy
         </summary>
